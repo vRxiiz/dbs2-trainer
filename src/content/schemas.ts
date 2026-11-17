@@ -58,7 +58,7 @@ export const schemas: Record<CodeTask['scenario'], SchemaInfo | null> = {
   },
   members: {
     name: 'Mitglieder',
-    tables: ['MEMBERS(ID PK, NAME, CITY, JOINED)'],
+    tables: ['MEMBERS(MEMBER_ID PK, FIRST_NAME, LAST_NAME, GENDER, DOB, EMAIL UNIQUE)'],
   },
   chat: {
     name: 'Chats (Übung 1)',
