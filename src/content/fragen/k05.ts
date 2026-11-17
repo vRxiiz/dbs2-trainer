@@ -1,0 +1,63 @@
+// Kapitel 5: Column Store und In-Memory-Datenbanken
+import { q } from './q';
+
+const F = 'Folien Column Store und In-Memory';
+
+export const k05 = [
+  q('page', '05-row-column', 'Was ist eine Page (Datenseite) in der physischen Datenorganisation?', ['Die grundlegende Einheit zum Lesen und Transferieren, typischerweise 4–16 KB (Oracle 8 KB)', 'Eine einzelne Zeile einer Tabelle', 'Ein Index-Knoten', 'Eine Datei pro Tabelle'], 0,
+    'Das DBMS liest immer ganze Pages in den Hauptspeicher.', F),
+  q('row-vorteil', '05-row-column', 'Wofür ist ein Row-Store gut geeignet?', ['Schnelles Einfügen neuer Datensätze (OLTP)', 'Analysen einzelner Spalten über Millionen Zeilen', 'Hohe Kompressionsraten von 1:30', 'Spätes Dekomprimieren'], 0,
+    'Zeilenweise Speicherung: Ein neuer Datensatz landet zusammenhängend auf einer Page. Für Spaltenanalysen müssen aber viele unnötige Daten gelesen werden.', F),
+  q('column-vorteil', '05-row-column', 'Welche Vorteile hat ein Column-Store?', ['Nur die für die Anfrage relevanten Spalten werden geladen', 'Gleichartige Daten lassen sich gut komprimieren', 'Operationen sind auch auf komprimierten Daten möglich', 'Einzelne INSERTs sind besonders billig'], [0, 1, 2],
+    'Spaltenweise Ablage spart I/O und komprimiert gut. Schreiben ist dagegen teuer, weil jede Spalte auf einem anderen Sektor liegt.', F),
+  q('kompressionsrate', '05-row-column', 'Welche Kompressionsrate nennt die Vorlesung für Column-Stores?', ['ca. 1:10 bis 1:30', 'ca. 1:2', 'ca. 1:3', 'ca. 1:1000'], 0,
+    'Column-Stores: 1:10 bis 1:30, Row-Stores nur etwa 1:3.', F),
+  q('olap-oltp', '05-row-column', 'Welche Zuordnung ist richtig?', ['Column-Store passt zu OLAP, Row-Store zu OLTP', 'Column-Store passt zu OLTP, Row-Store zu OLAP', 'Beide passen nur zu OLTP', 'Keiner passt zu Data Warehousing'], 0,
+    'Lesen und Analysieren (OLAP, Data Warehouse) → Column-Store. Viele Schreibtransaktionen (OLTP) → Row-Store.', F),
+
+  q('leicht-schwer', '05-kompression', 'Was unterscheidet leichtgewichtige von schwergewichtiger Komprimierung?', ['Auf leichtgewichtig komprimierten Daten kann man direkt rechnen', 'Schwergewichtige Verfahren sind immer schneller', 'Leichtgewichtig heißt ZIP oder RAR', 'Es gibt keinen Unterschied'], 0,
+    'Leichtgewichtig: RLE, Bit-Vektor, Dictionary, FOR, Differenz. Schwergewichtig: z. B. ZIP, RAR.', F),
+  q('rle', '05-kompression', 'Spalte Q1, Q1, Q1, Q2, Q2. Wie lautet die Lauflängenkodierung als (Wert, Start, Länge)?', ['(Q1,1,3) (Q2,4,2)', '(Q1,3) (Q2,2)', '(Q1,0,3) (Q2,3,2)', '(1,Q1,3) (4,Q2,2)'], 0,
+    'Je Lauf ein Tripel aus Wert, Startposition (ab 1) und Länge.', 'Übung Column Stores'),
+  q('rle-wann', '05-kompression', 'Wann ist die Lauflängenkodierung laut Entscheidungsbaum die beste Wahl?', ['Bei sortierten Werten mit durchschnittlicher Lauflänge > 2', 'Bei unsortierten Werten mit vielen eindeutigen Werten', 'Bei Zeitstempeln mit eindeutigen Werten', 'Nie'], 0,
+    'Sortiert und lange Läufe → RLE. Sortiert, aber kurze Läufe → Differenzkodierung.', 'Folie 19 (Entscheidungsbaum)'),
+  q('dictionary', '05-kompression', 'Wie ist ein Dictionary bei der Dictionary-Kodierung aufgebaut?', ['Künstlicher Zahlenschlüssel (meist ab 0) → eindeutiger Wert', 'Wert → Anzahl der Vorkommen', 'Zeilennummer → Bit-Liste', 'Referenzwert → Offset'], 0,
+    'Die Spalte speichert nur noch die kleinen Schlüssel, der Wert steht einmal im Dictionary.', F),
+  q('for', '05-kompression', 'Wie funktioniert die Frame-of-Reference-Kodierung?', ['Werte werden als kleiner Offset zu einem Referenzwert (z. B. Durchschnitt) gespeichert', 'Werte werden als Differenz zum Vorgänger gespeichert', 'Jeder Wert bekommt eine Bit-Spalte', 'Gleiche Werte werden zu Läufen zusammengefasst'], 0,
+    'FOR: Offset zum Referenzwert. Bei zu großer Differenz zeigt ein Escape-Code einen unkomprimierten Wert an.', F),
+  q('differenz', '05-kompression', 'Für welche Spalten ist die Differenzkodierung besonders gut?', ['Aufsteigende oder absteigende Sequenzen wie Zeitstempel oder IDs', 'Spalten mit drei verschiedenen Werten', 'Unsortierte Texte', 'Spalten mit sehr großen Bildern'], 0,
+    'Jeder Wert wird als kleine Differenz zum vorherigen Wert gespeichert.', F),
+  q('bitvektor', '05-kompression', 'Was speichert die Bit-Vektor-Kodierung?', ['Je Wert eine Bit-Spalte: 1 = Wert in der Zeile vorhanden', 'Je Zeile die Binärdarstellung der Zahl', 'Je Lauf ein Tripel', 'Einen Offset je Wert'], 0,
+    'Wie beim Bitmap-Index. Lohnt sich bei wenigen unterschiedlichen Werten und kann zusätzlich per RLE komprimiert werden.', F),
+  q('komp-zuordnung', '05-kompression', 'Welches Verfahren passt zur unsortierten Spalte f, f, m, f, m, f, d, d, …?', ['Bit-Vektor-Kodierung', 'Differenzkodierung', 'Frame of Reference', 'Lauflängenkodierung'], 0,
+    'Unsortiert, sehr wenige Werte, typische Selektionsspalte → Bit-Vektor.', 'Übung Column Stores'),
+
+  q('early-late', '05-materialization', 'Was bedeutet Late Materialization?', ['SQL-Operationen laufen so weit wie möglich auf komprimierten Daten, dekomprimiert wird erst zum Schluss', 'Die Daten werden zuerst dekomprimiert', 'Die MV wird erst später befüllt', 'Indexe werden nachträglich angelegt'], 0,
+    'Je später dekomprimiert wird, desto besser die Performance.', F),
+  q('early', '05-materialization', 'Was bedeutet Early Materialization?', ['Die Daten werden zuerst dekomprimiert, danach laufen die SQL-Anfragen', 'Die Anfrage läuft komplett auf komprimierten Daten', 'Die Daten werden schon beim Einfügen ausgewertet', 'Ein Refresh erfolgt sofort'], 0,
+    'Frühzeitige Materialisierung dekomprimiert zuerst und ist bei hoher Selektivität teurer.', F),
+  q('late-aufwand', '05-materialization', 'Welches Ergebnis zeigt der Vergleich aus dem Paper zur Response Time?', ['Late Materialization hat einen nahezu konstanten Aufwand, Early wächst mit der Selektivität', 'Early Materialization ist immer schneller', 'Beide sind gleich schnell', 'Late Materialization ist nur bei Row-Stores möglich'], 0,
+    'Je höher die Selektivität, desto mehr Aufwand bei Early Materialization.', F),
+
+  q('speicherhierarchie', '05-htap', 'Warum nutzen In-Memory-Datenbanken den Hauptspeicher und nicht Cache oder Register?', ['Der Hauptspeicher ist der beste Kompromiss aus Geschwindigkeit und Preis', 'Cache ist langsamer als Festplatten', 'Register können keine Zahlen speichern', 'Hauptspeicher ist dauerhaft wie eine Festplatte'], 0,
+    '100 Pages: Plattenspeicher ca. 1 s, Hauptspeicher ca. 0,1 ms. Cache wäre schneller, aber zu teuer.', F),
+  q('htap', '05-htap', 'Was bedeutet HTAP?', ['Kombination von OLTP und OLAP: Analysen in Echtzeit auf den laufenden Transaktionsdaten', 'Hochverfügbares Transaktionsprotokoll', 'Ein Hash-basierter Index', 'Eine Kompressionsart'], 0,
+    'Hybrid Transactional/Analytical Processing ohne vorherigen ETL-Prozess.', F),
+  q('main-diff', '05-htap', 'Wie sind die aktiven Daten einer HTAP-In-Memory-Datenbank aufgeteilt?', ['Main Store (nur lesen) und Differential Store (lesen und schreiben), die regelmäßig zusammengeführt werden', 'Row Store und Bitmap', 'Cache und Festplatte', 'Tabellen und Views'], 0,
+    'Neue Daten landen im Differential Store und werden zu bestimmten Zeiten in den Main Store gemergt.', F),
+  q('htap-vorteile', '05-htap', 'Welche Vorteile hat es, nie Daten zu löschen, sondern veraltete Tupel nur ungültig zu machen?', ['Zeitreiseabfragen', 'Auditfähigkeit und implizite Protokollierung', 'Keine Zugriffssperren nötig', 'Geringerer Speicherverbrauch'], [0, 1, 2],
+    'Nachteil sind erhöhter Speicherverbrauch und höhere Kosten.', F),
+  q('etl-flaschenhals', '05-htap', 'Was ist der Flaschenhals bei getrennten OLTP- und OLAP-Systemen?', ['Die Überführung der OLTP-Daten in OLAP-Daten (ETL)', 'Die Anzahl der Indexe', 'Die Größe der Pages', 'Die Anzahl der Trigger'], 0,
+    'Ohne HTAP müssen Daten erst per ETL ins Data Warehouse.', F),
+
+  q('inmemory-alter', '05-oracle-inmemory', 'Wie macht man eine bestehende Materialized View mv_movies in Oracle zum In-Memory-Objekt?', ['ALTER MATERIALIZED VIEW mv_movies INMEMORY;', 'CREATE INMEMORY VIEW mv_movies;', 'ALTER MATERIALIZED VIEW mv_movies SET MEMORY = TRUE;', 'EXEC DBMS_INMEMORY(mv_movies);'], 0,
+    'ALTER { TABLE | TABLESPACE | MATERIALIZED VIEW } name INMEMORY [MEMCOMPRESS …] [PRIORITY …].', F),
+  q('memcompress-default', '05-oracle-inmemory', 'Was ist der Standardwert von MEMCOMPRESS?', ['FOR QUERY LOW', 'FOR CAPACITY HIGH', 'NONE', 'FOR QUERY HIGH'], 0,
+    'FOR QUERY LOW: etwas leichtgewichtigere, für Abfragen optimierte Kompression.', F),
+  q('priority-default', '05-oracle-inmemory', 'Was bedeutet PRIORITY NONE (Default)?', ['Der In-Memory-Store wird erst bei einem Full Table Scan befüllt', 'Das Objekt wird sofort als erstes geladen', 'Das Objekt wird nie geladen', 'Das Objekt wird bei jedem Commit neu geladen'], 0,
+    'Mit PRIORITY CRITICAL werden die Daten als erste geladen.', F),
+  q('inmemory-klausur', '05-oracle-inmemory', '„In-Memory-MV, hochoptimiert für Abfragen und direkt beladen.“ Welche Klausel passt?', ['INMEMORY MEMCOMPRESS FOR QUERY HIGH PRIORITY CRITICAL', 'INMEMORY MEMCOMPRESS FOR CAPACITY LOW PRIORITY NONE', 'NO INMEMORY', 'INMEMORY PRIORITY LOW'], 0,
+    'Für Abfragen optimiert = FOR QUERY (HIGH = stärker optimiert), direkt beladen = höchste Priorität CRITICAL.', 'Altklausur, Aufgabe 2.3'),
+  q('population', '05-oracle-inmemory', 'Was macht die In-Memory-Population?', ['Sie wandelt zeilenbasierte Daten in spaltenbasierte Kopien im IM-Column-Store um', 'Sie löscht alte Daten von der Platte', 'Sie legt Indexe auf alle Spalten', 'Sie verteilt Daten auf mehrere Server'], 0,
+    'Die Originaldaten bleiben zeilenbasiert auf der Platte, im Speicher liegt eine spaltenbasierte Kopie.', F),
+];

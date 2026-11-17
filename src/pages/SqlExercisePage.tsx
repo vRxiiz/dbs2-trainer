@@ -1,0 +1,100 @@
+import { DataTable } from '../components/DataTable';
+import { EditorExercise } from '../components/EditorExercise';
+import { ScenarioBrowser } from '../components/ScenarioBrowser';
+import { ResultTable } from '../components/SqlOutput';
+import { LEVEL_NAME, scenarioById } from '../content/scenarios';
+import { viewExercises as sqlExercises } from '../content/viewExercises';
+import { runSqlExercise, type SqlRun } from '../sql/sqlGrading';
+import { useSql } from '../useSql';
+
+function Comparison({ run }: { run: SqlRun }) {
+  if (run.expected && run.actual)
+    return (
+      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        <div className="min-w-0">
+          <h3 className="mb-1 text-sm font-bold">Dein Ergebnis ({run.actual.rows.length} Zeilen)</h3>
+          <ResultTable columns={run.actual.columns} rows={run.actual.rows} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="mb-1 text-sm font-bold">Erwartet ({run.expected.rows.length} Zeilen)</h3>
+          <ResultTable columns={run.expected.columns} rows={run.expected.rows} />
+        </div>
+      </div>
+    );
+  if (run.diffs?.length)
+    return (
+      <div className="mt-5 space-y-4">
+        <h3 className="text-sm font-bold">Unterschiede zum erwarteten Datenbestand</h3>
+        {run.diffs.map((d) => (
+          <div key={d.table} className="min-w-0 space-y-2">
+            <p className="font-mono text-sm font-bold">{d.table}</p>
+            {d.missing.length > 0 && (
+              <>
+                <p className="text-xs text-muted">Diese Zeilen fehlen bei dir (bzw. sollten so aussehen):</p>
+                <ResultTable columns={d.columns} rows={d.missing} tone="ok" />
+              </>
+            )}
+            {d.extra.length > 0 && (
+              <>
+                <p className="text-xs text-muted">Diese Zeilen sind bei dir anders oder zu viel:</p>
+                <ResultTable columns={d.columns} rows={d.extra} tone="bad" />
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  return null;
+}
+
+export function SqlExercisePage({ id, onNext }: { id: string; onNext?: () => void }) {
+  const ex = sqlExercises.find((e) => e.id === id);
+  const { SQL, error } = useSql();
+  if (!ex)
+    return (
+      <p>
+        Aufgabe nicht gefunden. <a href="#/views" className="underline">Zur Liste</a>
+      </p>
+    );
+  const same = sqlExercises.filter((e) => (e.scenario ?? 'coworkers') === (ex.scenario ?? 'coworkers'));
+  const next = same[same.indexOf(ex) + 1];
+
+  return (
+    <EditorExercise
+      progressId={`sql:${ex.id}`}
+      backHref="#/views"
+      backLabel="Views und Materialized Views"
+      title={ex.title}
+      topic={`${scenarioById(ex.scenario).name} · ${LEVEL_NAME[ex.level]} · ${ex.kind === 'view' ? 'View anlegen' : ex.kind === 'dql' ? 'Abfrage' : 'Datenänderung'} · ${ex.topic}`}
+      task={ex.task}
+      hints={ex.hints}
+      solution={ex.solution}
+      starter={ex.starter ?? (ex.kind === 'dql' ? 'SELECT ' : '')}
+      ready={!!SQL}
+      loadError={error}
+      nextHref={next && `#/views/${next.id}`}
+      onNext={onNext}
+      freshNote={`Jeder Lauf startet mit dem ursprünglichen Datenbestand${ex.setup ? ' (inklusive der vorgegebenen View)' : ''}, Änderungen bleiben nicht erhalten.`}
+      aside={
+        <>
+          {ex.given && (
+            <div className="space-y-3 rounded-card border border-line bg-surface p-5">
+              <h2 className="font-bold">Diese Datensätze sollen eingefügt werden</h2>
+              {ex.given.map((g) => (
+                <div key={g.name}>
+                  <p className="mb-1 font-mono text-sm font-bold">{g.name}</p>
+                  <DataTable table={{ columns: g.columns, rows: g.rows, pk: [] }} caption={g.name} />
+                </div>
+              ))}
+            </div>
+          )}
+          <ScenarioBrowser SQL={SQL} scenario={ex.scenario} />
+        </>
+      }
+      run={(code, grade) => {
+        const r = runSqlExercise(SQL!, ex, code);
+        return { ...r, details: grade ? <Comparison run={r} /> : undefined };
+      }}
+    />
+  );
+}
