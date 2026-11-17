@@ -145,7 +145,8 @@ export function ExamPage() {
   const running = !!state && !state.submittedAt;
   const now = useNow(running);
   const timed = !!state && state.minutes > 0;
-  const left = timed ? state!.startedAt + state!.minutes * 60_000 - now : Infinity;
+  // now kann beim Start noch vom letzten Tick stammen: nie mehr als die volle Zeit anzeigen
+  const left = timed ? Math.min(state!.minutes * 60_000, state!.startedAt + state!.minutes * 60_000 - now) : Infinity;
 
   const update = (s: ExamState | null) => {
     setState(s);

@@ -1,15 +1,15 @@
 import { config } from '../config';
 import { useRef, useState } from 'react';
 import { CHAPTER_NAME, type Chapter } from '../content/mcQuestions';
+import { EXAM_MODES, type ExamMode } from '../content/chapters';
 import {
   exportProgress,
   importProgress,
   isFull,
   mastery,
   passed,
-  passStreak,
   percentOf,
-  PASS_PERCENT,
+  passPercent,
   resetProgress,
   storageLabel,
   useProgress,
@@ -17,42 +17,26 @@ import {
   type Mastery,
   type ProgressData,
 } from '../progress';
-import { ConsentSetting } from '../components/ConsentBanner';
 import { topicsOf } from '../content/topics';
-import { CHAPTERS, itemsOfTopic, practiceIds, questionIds, topicHref, topics } from '../progressCatalog';
+import { CHAPTERS, itemsOfTopic, practiceIds, questionIds, readiness, topicHref, topics } from '../progressCatalog';
 
 const btn = 'rounded-lg bg-brand px-4 py-2 font-semibold text-brand-contrast no-underline';
 const btnGhost = 'rounded-lg border border-line bg-surface px-4 py-2 font-semibold';
 const fmtDate = (t: number) =>
   new Date(t * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
-/* ---------------- Pruefungsreife ---------------- */
+/* ---------------- Pruefungsreife je Modus ---------------- */
 
-export function readiness(d: ProgressData) {
-  const streak = passStreak(d.exams);
-  const allQ = CHAPTERS.flatMap((c) => questionIds[c]);
-  const sure = allQ.filter((id) => mastery(d.items[id]) === 'sicher').length;
-  const sureShare = allQ.length ? sure / allQ.length : 0;
-  const anyPassed = d.exams.some(passed);
-  let title: string;
-  let text: string;
-  if (streak >= config.readyStreak && sureShare >= config.readySureShare) {
-    title = 'Prüfungsreif';
-    text = `Du hast die letzten ${streak} vollständigen Probeklausuren bestanden und beherrschst die Wissensfragen. Du schaffst das!`;
-  } else if (streak >= config.readyStreak) {
-    title = 'Fast prüfungsreif';
-    text = `Die Probeklausuren sitzen. Festige noch die Wissensfragen, bis mindestens ${Math.round(config.readySureShare * 100)} % sicher sind.`;
-  } else if (anyPassed) {
-    title = 'Auf gutem Weg';
-    text = `Du hast schon bestanden. Schaffe ${config.readyStreak} vollständige Probeklausuren in Folge, dann bist du prüfungsreif.`;
-  } else if (d.exams.length) {
-    title = 'Dranbleiben';
-    text = 'Schau dir an, in welchen Kapiteln Punkte fehlen, übe gezielt und versuche es erneut. Jede Klausur bringt dich weiter.';
-  } else {
-    title = 'Los geht’s';
-    text = 'Mach deine erste Probeklausur. Danach siehst du hier, wo du stehst und was noch fehlt.';
-  }
-  return { streak, sure, total: allQ.length, sureShare, title, text, ready: streak >= config.readyStreak && sureShare >= config.readySureShare };
+const MODES = Object.keys(EXAM_MODES) as ExamMode[];
+
+function modeText(d: ProgressData, mode: ExamMode, streak: number, sure: number, ready: boolean): [string, string] {
+  const sureText = `${Math.round(config.readySureShare * 100)} %`;
+  if (ready) return ['Prüfungsreif', `Die letzten ${streak} Versuche mit Zeitlimit bestanden und die Aufgaben sitzen. Du schaffst das!`];
+  if (streak >= config.readyStreak) return ['Fast prüfungsreif', `Die Probeklausuren sitzen. Festige noch die Aufgaben, bis mindestens ${sureText} sicher sind (jetzt ${Math.round(sure * 100)} %).`];
+  const mine = d.exams.filter((e) => e.mode === mode);
+  if (mine.some(passed)) return ['Auf gutem Weg', `Schaffe ${config.readyStreak} Versuche mit Zeitlimit in Folge, dann bist du prüfungsreif.`];
+  if (mine.length) return ['Dranbleiben', 'Schau dir an, in welchen Kapiteln Punkte fehlen, übe gezielt und versuche es erneut.'];
+  return ['Los geht’s', 'Mach deinen ersten Versuch. Danach siehst du hier, wo du stehst.'];
 }
 
 function StreakDots({ streak }: { streak: number }) {
@@ -124,11 +108,18 @@ function HistoryChart({ exams }: { exams: ExamAttempt[] }) {
             </g>
           );
         })}
-        {/* Bestehensgrenze */}
-        <line x1={padL} x2={W - padR} y1={y(PASS_PERCENT)} y2={y(PASS_PERCENT)} className="stroke-ink" strokeWidth={1.5} />
-        <text x={W - padR} y={y(PASS_PERCENT) - 5} textAnchor="end" fontSize="11" className="fill-ink">
-          Bestehensgrenze
-        </text>
+        {/* Bestehensgrenze je Versuch (MCT 60 %, E-Klausur 50 %) */}
+        {shown.map((e, i) => (
+          <line
+            key={`g${e.id}`}
+            x1={padL + slot * i + 2}
+            x2={padL + slot * (i + 1) - 2}
+            y1={y(passPercent(e.mode))}
+            y2={y(passPercent(e.mode))}
+            className="stroke-ink"
+            strokeWidth={1.5}
+          />
+        ))}
       </svg>
       {h && (
         <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow">
@@ -136,15 +127,18 @@ function HistoryChart({ exams }: { exams: ExamAttempt[] }) {
           <br />
           {h.p.toLocaleString('de-DE')} von {h.x} Punkten ({percentOf(h).toFixed(0)} %) · {passed(h) ? '✓ bestanden' : '✗ nicht bestanden'}
           <br />
-          {isFull(h) ? 'vollständig (zählt für Prüfungsreife)' : `${h.c.length} Kapitel, ${h.m} Min.`}
+          {EXAM_MODES[h.mode].name} · {isFull(h) ? 'mit Zeitlimit (zählt für Prüfungsreife)' : 'ohne Zeitlimit'}
         </div>
       )}
       <div className="mt-1 flex flex-wrap gap-4 text-xs text-muted">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded-sm bg-data" aria-hidden /> vollständige Probeklausur
+          <span className="inline-block h-3 w-3 rounded-sm bg-data" aria-hidden /> mit Zeitlimit
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded-sm bg-muted" aria-hidden /> Teilklausur (einzelne Kapitel oder 30 Min.)
+          <span className="inline-block h-3 w-3 rounded-sm bg-muted" aria-hidden /> ohne Zeitlimit
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-0.5 w-3 bg-ink" aria-hidden /> Bestehensgrenze
         </span>
       </div>
     </div>
@@ -239,7 +233,7 @@ export function ProgressPage() {
     const blob = new Blob([exportProgress()], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `db-trainer-fortschritt-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `dbs2-trainer-fortschritt-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -252,35 +246,38 @@ export function ProgressPage() {
       <h1 className="mt-2 text-3xl font-bold">Dein Fortschritt</h1>
       <p className="mt-1 text-sm text-muted">{storageLabel()}</p>
 
-      {/* Pruefungsreife */}
-      <section className={`mt-6 rounded-card border-2 p-5 ${r.ready ? 'border-ok bg-ok-bg' : 'border-line bg-surface'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="max-w-xl">
-            <p className="text-sm font-semibold uppercase tracking-wide text-muted">Prüfungsreife</p>
-            <h2 className="mt-1 text-3xl font-bold">{r.title}</h2>
-            <p className="mt-2">{r.text}</p>
-          </div>
-          <div className="text-center">
-            <StreakDots streak={r.streak} />
-            <p className="mt-2 text-xs text-muted">
-              {Math.min(r.streak, config.readyStreak)} von {config.readyStreak} in Folge bestanden
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <a href="#/pruefung" className={btn}>
-            Probeklausur starten
-          </a>
-          <a href="#/lernen" className={`${btnGhost} no-underline`}>
-            Wissensfragen lernen
-          </a>
-        </div>
-        <p className="mt-3 text-xs text-muted">
-          Für die Prüfungsreife zählen vollständige Probeklausuren (alle Kapitel, mindestens 60 Minuten), bestanden ab{' '}
-          {PASS_PERCENT} %, und mindestens {Math.round(config.readySureShare * 100)} % der Wissensfragen „sicher“. Das ist eine Lernhilfe, keine Garantie für die
-          echte Klausur.
-        </p>
+      {/* Pruefungsreife je Modus */}
+      <section className="mt-6 grid gap-4 lg:grid-cols-3">
+        {MODES.map((m) => {
+          const { streak, sure, ready } = r[m];
+          const [title, text] = modeText(d, m, streak, sure, ready);
+          return (
+            <div key={m} className={`flex flex-col rounded-card border-2 p-5 ${ready ? 'border-ok bg-ok-bg' : 'border-line bg-surface'}`}>
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">{EXAM_MODES[m].name}</p>
+              <h2 className="mt-1 text-2xl font-bold">{title}</h2>
+              <p className="mt-2 flex-1 text-sm">{text}</p>
+              <div className="mt-3">
+                <StreakDots streak={streak} />
+                <p className="mt-2 text-xs text-muted">
+                  {Math.min(streak, config.readyStreak)} von {config.readyStreak} in Folge bestanden · {Math.round(sure * 100)} % der Aufgaben sicher
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </section>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <a href="#/pruefung" className={btn}>
+          Probeklausur starten
+        </a>
+        <a href="#/lernen" className={`${btnGhost} no-underline`}>
+          Wissensfragen lernen
+        </a>
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        Für die Prüfungsreife zählen Versuche mit Zeitlimit, bestanden ab {passPercent('mct1')} % (MCT) bzw. {passPercent('klausur')} % (E-Klausur), und
+        mindestens {Math.round(config.readySureShare * 100)} % der Aufgaben des Modus „sicher“. Das ist eine Lernhilfe, keine Garantie für die echte Prüfung.
+      </p>
 
       {/* Kennzahlen */}
       <section className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -311,7 +308,7 @@ export function ProgressPage() {
                   <tr className="text-left text-muted">
                     <th className="py-1 pr-3">Nr.</th>
                     <th className="py-1 pr-3">Datum</th>
-                    <th className="py-1 pr-3">Umfang</th>
+                    <th className="py-1 pr-3">Modus</th>
                     <th className="py-1 pr-3 text-right">Punkte</th>
                     <th className="py-1 pr-3 text-right">Prozent</th>
                     <th className="py-1">Ergebnis</th>
@@ -322,7 +319,7 @@ export function ProgressPage() {
                     <tr key={e.id} className="border-t border-line">
                       <td className="py-1 pr-3">{d.exams.length - i}</td>
                       <td className="py-1 pr-3">{fmtDate(e.t)}</td>
-                      <td className="py-1 pr-3">{isFull(e) ? 'vollständig' : `${e.c.length} Kap., ${e.m} Min.`}</td>
+                      <td className="py-1 pr-3">{EXAM_MODES[e.mode].name}{isFull(e) ? '' : ', ohne Zeitlimit'}</td>
                       <td className="py-1 pr-3 text-right">
                         {e.p.toLocaleString('de-DE')} / {e.x}
                       </td>
@@ -414,7 +411,7 @@ export function ProgressPage() {
                   <span className="text-muted">Klausur: </span>
                   {exam === null ? '–' : (
                     <span>
-                      {exam.toFixed(0)} % {exam >= PASS_PERCENT ? '✓' : '✗'}
+                      {exam.toFixed(0)} % {exam >= 50 ? '✓' : '✗'}
                     </span>
                   )}
                 </div>
@@ -474,8 +471,6 @@ export function ProgressPage() {
           })}
         </ul>
       </section>
-
-      <ConsentSetting />
 
       {/* Sichern / Laden */}
       <section className="mt-6 rounded-card border border-line bg-surface p-5">

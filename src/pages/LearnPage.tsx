@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react';
-import { track } from '../analytics';
 import { CHAPTER_NAME, mcQuestions, type Chapter, type McQuestion } from '../content/mcQuestions';
 import { mastery, recordItem, useProgress, type Mastery, type ProgressData } from '../progress';
 import { CHAPTERS } from '../progressCatalog';
@@ -25,10 +24,10 @@ function nextQuestion(pool: McQuestion[], d: ProgressData, skip?: string): McQue
   return pool.find((q) => q.id !== skip) ?? pool[0] ?? null;
 }
 
-export function LearnPage({ topicId }: { topicId?: string }) {
+export function LearnPage({ topicId, chapter: initialChapter }: { topicId?: string; chapter?: Chapter }) {
   const d = useProgress();
   const topic = topicId ? topicById(topicId) : undefined;
-  const [chapter, setChapter] = useState<Chapter | 'alle'>('alle');
+  const [chapter, setChapter] = useState<Chapter | 'alle'>(initialChapter ?? 'alle');
   const pool = useMemo(
     () => mcQuestions.filter((q) => (topic ? q.topicId === topic.id : chapter === 'alle' || q.chapter === chapter)),
     [chapter, topic],
@@ -152,18 +151,6 @@ export function LearnPage({ topicId }: { topicId?: string }) {
                 onClick={() => {
                   setChecked(true);
                   recordItem(`mc:${q.id}`, right);
-                  track({
-                    k: 'i',
-                    i: `mc:${q.id}`,
-                    tp: q.topicId,
-                    ch: q.chapter,
-                    ok: right ? 1 : 0,
-                    s: Math.min(3600, Math.round((Date.now() - started.current) / 1000)),
-                    a: (d.items[`mc:${q.id}`]?.[0] ?? 0) + 1,
-                    h: 0,
-                    o: answer,
-                    src: 'l',
-                  });
                 }}
               >
                 Antworten

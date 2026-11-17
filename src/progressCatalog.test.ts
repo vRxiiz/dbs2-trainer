@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExamAttempt, ProgressData } from './progress';
+import { topics } from './content/topics';
 import { catalog, practiceHref, readiness } from './progressCatalog';
 
 const full = (mode: ExamAttempt['mode'], p: number, i: number): ExamAttempt => ({
@@ -8,6 +9,11 @@ const full = (mode: ExamAttempt['mode'], p: number, i: number): ExamAttempt => (
 const data = (exams: ExamAttempt[]): ProgressData => ({ v: 1, done: [], items: {}, exams });
 
 describe('Katalog', () => {
+  it('jedes Thema der Folien hat mindestens eine Frage oder Übung', () => {
+    const empty = topics.filter((t) => !catalog.some((c) => c.topicId === t.id)).map((t) => t.id);
+    expect(empty).toEqual([]);
+  });
+
   it('enthält die Rechentrainer mit ihren Themen', () => {
     const topic = (id: string) => catalog.find((c) => c.id === id)?.topicId;
     expect(topic('calc:btree')).toBe('01-bbaum');
