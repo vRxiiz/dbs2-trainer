@@ -99,7 +99,12 @@ export function readiness(d: ProgressData): Record<ExamMode, Readiness> {
   const out = {} as Record<ExamMode, Readiness>;
   for (const mode of Object.keys(EXAM_MODES) as ExamMode[]) {
     const ids = examItemIds(mode);
-    const sure = ids.length ? ids.filter((id) => mastery(d.items[id]) === 'sicher').length / ids.length : 1;
+    // Code-Aufgaben: in der Uebung geloest zaehlt wie sicher, solange der letzte Klausurversuch nicht falsch war
+    const isSure = (id: string) => {
+      const m = mastery(d.items[id]);
+      return m === 'sicher' || (id.startsWith('code:') && d.done.includes(id) && m !== 'falsch');
+    };
+    const sure = ids.length ? ids.filter(isSure).length / ids.length : 1;
     const streak = passStreak(d.exams, mode);
     out[mode] = { streak, sure, ready: streak >= config.readyStreak && sure >= config.readySureShare };
   }

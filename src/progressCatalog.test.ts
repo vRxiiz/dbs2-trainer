@@ -38,4 +38,16 @@ describe('Prüfungsreife', () => {
     expect(r.mct1.streak).toBe(2);
     expect(r.mct2.ready).toBe(false);
   });
+  it('E-Klausur: in der Übung gelöste Klausuraufgaben zählen als sicher, außer zuletzt falsch', () => {
+    const ids = catalog.filter((c) => c.id.startsWith('code:')).map((c) => c.id);
+    const exam = ['code:zimmer-verfuegbarkeit', 'code:buchungen-pro-stadt'];
+    expect(exam.every((id) => ids.includes(id))).toBe(true);
+    const d: ProgressData = { v: 1, done: exam, items: { 'code:buchungen-pro-stadt': [3, 1, 0, 5] }, exams: [] };
+    const solved = readiness(d).klausur.sure;
+    const none = readiness(data([])).klausur.sure;
+    expect(solved).toBeGreaterThan(none);
+    // eine geloeste, eine zuletzt falsch: genau eine zaehlt
+    const one = readiness({ ...d, done: [exam[0]] }).klausur.sure;
+    expect(solved).toBeCloseTo(one);
+  });
 });
