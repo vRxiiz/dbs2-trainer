@@ -49,17 +49,6 @@ export interface AppConfig {
   fontUrl: string;
   footerLinks: FooterLink[];
   license: string;
-  /** Repository fuer den Aufgaben-Editor ("Auf GitHub speichern"); leer = Knopf ausblenden */
-  repo: string;
-  branch: string;
-  /** Adresse des Sammelservers fuer die anonyme Lernstatistik (leer = keine Statistik) */
-  analyticsUrl: string;
-  /** Eigener Feedbackbogen (z. B. ILIAS-Umfrage, MS Forms); leer = eingebauter Bogen mit GitHub-Meldung */
-  feedbackUrl: string;
-  /** E-Mail-Adresse fuer Feedback (zeigt zusaetzlich den Knopf "Per E-Mail"); leer = ausgeblendet */
-  feedbackEmail: string;
-  /** Auswertungen erst ab so vielen verschiedenen Lernenden zeigen (Datenschutz) */
-  analyticsMinGroup: number;
   /** Pruefungsreife: so viele vollstaendige Probeklausuren in Folge bestanden ... */
   readyStreak: number;
   /** ... und dieser Anteil der Wissensfragen "sicher" (0 bis 1) */
@@ -67,34 +56,23 @@ export interface AppConfig {
 }
 
 export const defaults: AppConfig = {
-  appName: 'DB-Trainer',
-  tagline: 'Datenbanksysteme interaktiv üben · TH Köln, Campus Gummersbach',
+  appName: 'DBS2-Trainer',
+  tagline: 'Datenbanken und Datenmanagement (DBS2) interaktiv üben · TH Köln, Campus Gummersbach',
   title: '',
   favicon: '',
   logo: '',
   institution: '',
   theme: 'th-koeln',
   language: 'de',
-  languageSwitcher: true,
+  languageSwitcher: false,
   themeSwitcher: false,
   header: 'farbig',
   colors: {},
   font: '',
   fontUrl: '',
-  footerLinks: [
-    { label: 'Feedback', href: '#/feedback' },
-    { label: 'QR-Code', href: '#/teilen' },
-    { label: 'Dozentenmodus', href: '#/dozent' },
-    { label: 'Quellcode (MIT)', href: 'https://github.com/markusschuetze/db-trainer' },
-  ],
+  footerLinks: [{ label: 'Vorlage: db-trainer (MIT)', href: 'https://github.com/markusschuetze/db-trainer' }],
   license: 'Software: MIT · Inhalte: CC BY-SA 4.0',
-  repo: 'markusschuetze/db-trainer',
-  branch: 'main',
-  analyticsUrl: '',
-  feedbackUrl: '',
-  feedbackEmail: '',
-  analyticsMinGroup: 5,
-  readyStreak: 3,
+  readyStreak: 2,
   readySureShare: 0.8,
 };
 
@@ -140,12 +118,6 @@ export function mergeConfig(base: AppConfig, input: unknown): { config: AppConfi
     } else if (k === 'language') {
       if (value === 'de' || value === 'en' || value === 'auto') out.language = value;
       else warnings.push('language muss "de", "en" oder "auto" sein.');
-    } else if (k === 'analyticsUrl') {
-      if (typeof value === 'string' && (value === '' || /^https?:\/\//.test(value))) out.analyticsUrl = value.replace(/\/+$/, '');
-      else warnings.push('analyticsUrl muss leer sein oder mit http:// bzw. https:// beginnen.');
-    } else if (k === 'analyticsMinGroup') {
-      if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 100) out.analyticsMinGroup = value;
-      else warnings.push('analyticsMinGroup muss eine ganze Zahl zwischen 1 und 100 sein.');
     } else if (typeof value === typeof expected) {
       (out as unknown as Record<string, unknown>)[k] = value;
     } else warnings.push(`Feld „${key}“ hat den falschen Typ (erwartet: ${typeof expected}).`);
@@ -162,9 +134,9 @@ export async function loadRuntimeConfig(): Promise<void> {
     if (text.trimStart().startsWith('<')) return; // HTML statt JSON: keine config.json vorhanden
     const { config: merged, warnings } = mergeConfig(defaults, JSON.parse(text));
     Object.assign(config, merged);
-    for (const w of warnings) console.warn(`[DB-Trainer] ${w}`);
+    for (const w of warnings) console.warn(`[DBS2-Trainer] ${w}`);
   } catch (e) {
-    console.warn('[DB-Trainer] config.json konnte nicht gelesen werden, es gelten die Standardwerte.', e);
+    console.warn('[DBS2-Trainer] config.json konnte nicht gelesen werden, es gelten die Standardwerte.', e);
   }
 }
 
