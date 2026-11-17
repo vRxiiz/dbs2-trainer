@@ -47,3 +47,5 @@ export const EXAM_MODES: Record<ExamMode, { name: string; chapters: Chapter[]; m
     text: 'E-Klausur im SQL Developer: drei Code-Aufgaben wie in der Altklausur (Trigger, Materialized View, Prozedur).',
   },
 };
+
+export const LEVEL_NAME = { 1: 'Leicht', 2: 'Mittel', 3: 'Klausurniveau' } as const;

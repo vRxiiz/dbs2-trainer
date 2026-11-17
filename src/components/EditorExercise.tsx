@@ -1,6 +1,5 @@
 import { t } from '../i18n';
-import { useRef, useState, type ReactNode } from 'react';
-import { track } from '../analytics';
+import { useState, type ReactNode } from 'react';
 import type { CheckResult } from '../sql/ddlGrading';
 import type { StatementResult } from '../sql/oracle';
 import { loadDraft, markDone, saveDraft } from '../progress';
@@ -36,7 +35,8 @@ export function EditorExercise({
   run,
   nextHref,
   onNext,
-  tracking,
+  checkOnly = false,
+  editorLabel = 'SQL-Editor',
 }: {
   progressId: string;
   backHref: string;
@@ -50,15 +50,15 @@ export function EditorExercise({
   starter?: string;
   ready: boolean;
   loadError?: string;
-  freshNote: string;
+  freshNote?: string;
   run: (code: string, grade: boolean) => EditorRun;
   nextHref?: string;
   /** eingebettet (z. B. im Mix): kein Zurueck-Link, statt Link ein Button zur naechsten Aufgabe; ueberspringen moeglich */
   onNext?: () => void;
-  /** Messung fuer die anonyme Lernstatistik */
-  tracking?: { id: string; topicId: string; chapter: string; level: number };
+  /** Code-Aufgaben: nur „Prüfen“ (keine Ausführung), Ausgabe nur mit Inhalt */
+  checkOnly?: boolean;
+  editorLabel?: string;
 }) {
-  const started = useRef(Date.now());
   const [code, setCode] = useState(() => loadDraft(progressId, starter));
   const [out, setOut] = useState<EditorRun | null>(null);
   const [graded, setGraded] = useState(false);
@@ -76,19 +76,6 @@ export function EditorExercise({
     setOut(r);
     setGraded(grade);
     if (grade) {
-      if (tracking)
-        track({
-          k: 'i',
-          i: tracking.id,
-          tp: tracking.topicId,
-          ch: tracking.chapter,
-          ok: r.passed ? 1 : 0,
-          s: Math.min(3600, Math.round((Date.now() - started.current) / 1000)),
-          a: attempts + 1,
-          h: hintsShown,
-          lv: tracking.level,
-          src: 'u',
-        });
       setAttempts((a) => a + 1);
       if (r.passed) markDone(progressId);
     }
@@ -128,12 +115,14 @@ export function EditorExercise({
         </section>
 
         <section className="min-w-0 space-y-4">
-          <SqlEditor value={code} onChange={update} onRun={() => execute(false)} label="SQL-Editor" />
+          <SqlEditor value={code} onChange={update} onRun={() => execute(checkOnly)} label={editorLabel} />
           <div className="flex flex-wrap items-center gap-3">
-            <button className={btnGhost} onClick={() => execute(false)} disabled={!ready} title="Strg/Cmd + Enter">
-              {t('Ausführen')}
-            </button>
-            <button className={btn} onClick={() => execute(true)} disabled={!ready}>
+            {!checkOnly && (
+              <button className={btnGhost} onClick={() => execute(false)} disabled={!ready} title="Strg/Cmd + Enter">
+                {t('Ausführen')}
+              </button>
+            )}
+            <button className={btn} onClick={() => execute(true)} disabled={!ready} title={checkOnly ? 'Strg/Cmd + Enter' : undefined}>
               {t('Prüfen')}
             </button>
             {attempts > 0 && !showSolution && (
@@ -158,7 +147,9 @@ export function EditorExercise({
           </div>
           {!ready && !loadError && <p className="text-sm text-muted">{t('Datenbank wird geladen …')}</p>}
           {loadError && <p className="text-sm text-bad">Datenbank konnte nicht geladen werden: {loadError}</p>}
-          <p className="text-xs text-muted">{freshNote} Fehler stoppen das Skript nicht, wie in SQL Developer.</p>
+          {freshNote && (
+            <p className="text-xs text-muted">{freshNote} Fehler stoppen das Skript nicht, wie in SQL Developer.</p>
+          )}
 
           {graded && out && <CheckList checks={out.checks} passed={out.passed} nextHref={nextHref} onNext={onNext} />}
 
@@ -170,7 +161,7 @@ export function EditorExercise({
             </div>
           )}
 
-          {out && (
+          {out && (out.results.length > 0 || out.details) && (
             <div className="rounded-card border border-line bg-surface p-4">
               <h2 className="mb-2 font-bold">Ausgabe</h2>
               <StatementOutput results={out.results} />
