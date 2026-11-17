@@ -82,23 +82,49 @@ export function stripComments(sql: string): string {
   return out;
 }
 
-/** Zerlegt ein Skript an ; (ausserhalb von Zeichenketten). */
+/** Beginn eines PL/SQL-Blocks, der erst an einer Zeile mit "/" endet (wie in SQL Developer). */
+const PLSQL_HEAD = /^\s*(DECLARE|BEGIN|CREATE\s+(?:OR\s+REPLACE\s+)?(?:EDITIONABLE\s+)?(?:PROCEDURE|FUNCTION|TRIGGER|PACKAGE))\b/i;
+
+/**
+ * Zerlegt ein Skript an ; (ausserhalb von Zeichenketten). PL/SQL-Bloecke (DECLARE, BEGIN,
+ * CREATE PROCEDURE/FUNCTION/TRIGGER/PACKAGE) bleiben ganz und enden an einer Zeile mit "/".
+ */
 export function splitStatements(script: string): string[] {
-  const clean = stripComments(script).replace(/^\s*\/\s*$/gm, ';');
+  const clean = stripComments(script);
   const stmts: string[] = [];
   let cur = '';
   let quote = '';
-  for (const c of clean) {
+  let i = 0;
+  const lineIsSlash = (at: number) => {
+    const start = clean.lastIndexOf('\n', at - 1) + 1;
+    const end = clean.indexOf('\n', at);
+    return clean.slice(start, end < 0 ? clean.length : end).trim() === '/';
+  };
+  while (i < clean.length) {
+    const c = clean[i];
+    if (!quote && !cur.trim()) {
+      const rest = clean.slice(i);
+      if (PLSQL_HEAD.test(rest)) {
+        const slash = /^[ \t]*\/[ \t]*$/m.exec(rest);
+        const end = slash ? slash.index : rest.length;
+        const block = rest.slice(0, end).trim();
+        if (block) stmts.push(block);
+        i += slash ? slash.index + slash[0].length : rest.length;
+        cur = '';
+        continue;
+      }
+    }
     if (quote) {
       cur += c;
       if (c === quote) quote = '';
     } else if (c === "'" || c === '"') {
       quote = c;
       cur += c;
-    } else if (c === ';') {
+    } else if (c === ';' || (c === '/' && lineIsSlash(i))) {
       if (cur.trim()) stmts.push(cur.trim());
       cur = '';
     } else cur += c;
+    i++;
   }
   if (cur.trim()) stmts.push(cur.trim());
   return stmts;
@@ -574,6 +600,126 @@ function checkSingleRow(db: Database, stmt: string) {
   }
 }
 
+
+/* ------------------------------------------------------------------ */
+/* DBS2: Views, Materialized Views, Indexe, In-Memory, PL/SQL-Hinweise */
+/* ------------------------------------------------------------------ */
+
+const MV = '__mviews';
+
+function ensureMvTable(db: Database) {
+  db.exec(`CREATE TABLE IF NOT EXISTS "${MV}" (name TEXT PRIMARY KEY, query TEXT, build TEXT, refresh TEXT, on_ TEXT)`);
+}
+
+function mvInfo(db: Database, name: string): Row | undefined {
+  ensureMvTable(db);
+  return query(db, `SELECT * FROM "${MV}" WHERE lower(name) = lower(?)`, [name])[0];
+}
+
+function refreshMv(db: Database, name: string): string {
+  const info = mvInfo(db, name);
+  if (!info) throw new OracleError(`Materialized View ${name} existiert nicht.`, 'ORA-23401');
+  const real = String(info.name);
+  db.exec(`DELETE FROM "${real}"`);
+  db.exec(`INSERT INTO "${real}" ${rewriteQuery(String(info.query))}`);
+  return real;
+}
+
+/** ON COMMIT: alle so definierten Materialized Views neu befuellen */
+function refreshOnCommit(db: Database): string[] {
+  ensureMvTable(db);
+  return query(db, `SELECT name FROM "${MV}" WHERE on_ = 'COMMIT'`).map((r) => refreshMv(db, String(r.name)));
+}
+
+const INMEMORY_CLAUSE = /^INMEMORY(\s+MEMCOMPRESS\s+FOR\s+(QUERY|CAPACITY)(\s+(LOW|HIGH))?)?(\s+PRIORITY\s+(NONE|LOW|MEDIUM|HIGH|CRITICAL))?$/i;
+
+/**
+ * Anweisungen, die SQLite nicht kennt, die in DBS2 aber vorkommen. undefined = normal weiter.
+ * Materialized Views werden als Tabelle (Schnappschuss) abgelegt und nur bei REFRESH neu befuellt.
+ */
+function runDbs2Statement(db: Database, stmt: string, kw: string | undefined): string | undefined {
+  let m: RegExpMatchArray | null;
+  if (/^SET\s+SERVEROUTPUT\s+(ON|OFF)\b/i.test(stmt)) return 'SERVEROUTPUT gesetzt (Ausgaben von DBMS_OUTPUT gibt es nur in SQL Developer).';
+  const refresh =
+    stmt.match(re(`^EXEC(?:UTE)?\\s+DBMS_MVIEW\\.REFRESH\\s*\\(\\s*'(${ID})'[^)]*\\)$`)) ??
+    stmt.match(re(`^BEGIN\\s+DBMS_MVIEW\\.REFRESH\\s*\\(\\s*'(${ID})'[^)]*\\)\\s*;\\s*END\\s*;?$`, 'ius'));
+  if (refresh) return `Materialized View ${refreshMv(db, refresh[1])} vollständig aktualisiert.`;
+  if (kw === 'DECLARE' || kw === 'BEGIN' || /^EXEC(UTE)?\b/i.test(stmt))
+    throw new OracleError(
+      'PL/SQL-Blöcke und Prozeduraufrufe führt der Trainer nicht aus (SQLite kennt kein PL/SQL). Übe sie in den Code-Aufgaben, ausführen kannst du sie im SQL Developer.',
+    );
+  if (PLSQL_HEAD.test(stmt))
+    throw new OracleError(
+      'Prozeduren, Funktionen, Trigger und Packages kann der Trainer nicht ausführen (SQLite kennt kein PL/SQL). Übe sie in den Code-Aufgaben, dort wird dein Code geprüft.',
+    );
+  if ((m = stmt.match(re(`^CREATE\\s+(OR\\s+REPLACE\\s+)?(?:FORCE\\s+)?VIEW\\s+"?(${ID})"?\\s*(\\([^)]*\\))?\\s+AS\\s+(.*)$`, 'ius')))) {
+    const [, orReplace, name, cols, select] = m;
+    const exists = query(db, "SELECT type FROM sqlite_master WHERE lower(name) = lower(?)", [name])[0];
+    if (exists && (exists.type !== 'view' || !orReplace))
+      throw new OracleError(`Der Name ${name} wird bereits von einem Objekt verwendet.`, 'ORA-00955');
+    checkGroupBy(select);
+    if (exists) db.exec(`DROP VIEW "${name}"`);
+    db.exec(`CREATE VIEW "${name}"${cols ? ` ${cols}` : ''} AS ${rewriteQuery(select)}`);
+    return `View ${name} ${exists ? 'ersetzt' : 'erstellt'}.`;
+  }
+  if ((m = stmt.match(re(`^CREATE\\s+MATERIALIZED\\s+VIEW\\s+"?(${ID})"?\\s*(.*?)\\bAS\\s+(SELECT\\b.*)$`, 'ius')))) {
+    const [, name, opts, select] = m;
+    const o = opts.replace(/\s+/g, ' ').trim().toUpperCase();
+    const optRe = /^(BUILD (IMMEDIATE|DEFERRED) ?)?(REFRESH( (FAST|COMPLETE|FORCE))? ?)?(ON (COMMIT|DEMAND) ?)?(START WITH .+?)?$/;
+    if (!optRe.test(o))
+      throw new OracleError(
+        'Ungültige Optionen der Materialized View. Reihenfolge: BUILD IMMEDIATE|DEFERRED, REFRESH FAST|COMPLETE|FORCE, ON COMMIT|DEMAND oder START WITH … NEXT …',
+        'ORA-00905',
+      );
+    if (/START WITH/.test(o) && !/NEXT/.test(o)) throw new OracleError('Nach START WITH folgt mit NEXT das Intervall.', 'ORA-00905');
+    if (query(db, "SELECT 1 FROM sqlite_master WHERE lower(name) = lower(?)", [name]).length)
+      throw new OracleError(`Der Name ${name} wird bereits von einem Objekt verwendet.`, 'ORA-00955');
+    checkGroupBy(select);
+    const build = /DEFERRED/.test(o) ? 'DEFERRED' : 'IMMEDIATE';
+    const refreshMode = o.match(/REFRESH (FAST|COMPLETE|FORCE)/)?.[1] ?? 'FORCE';
+    const on = /ON COMMIT/.test(o) ? 'COMMIT' : /START WITH/.test(o) ? 'START WITH' : 'DEMAND';
+    const sel = rewriteQuery(select);
+    db.exec(`CREATE TABLE "${name}" AS SELECT * FROM (${sel}) ${build === 'DEFERRED' ? 'WHERE 0' : ''}`);
+    ensureMvTable(db);
+    db.prepare(`INSERT INTO "${MV}" VALUES (?, ?, ?, ?, ?)`).run([name, select, build, refreshMode, on]);
+    return `Materialized View ${name} erstellt (BUILD ${build}, REFRESH ${refreshMode}, ${on === 'START WITH' ? 'periodisch' : `ON ${on}`}). ${
+      build === 'DEFERRED' ? 'Sie ist noch leer, bis zum ersten Refresh.' : 'Sie enthält jetzt einen Schnappschuss der Daten.'
+    }`;
+  }
+  if ((m = stmt.match(re(`^DROP\\s+MATERIALIZED\\s+VIEW\\s+"?(${ID})"?$`)))) {
+    const info = mvInfo(db, m[1]);
+    if (!info) throw new OracleError(`Materialized View ${m[1]} existiert nicht.`, 'ORA-12003');
+    db.exec(`DROP TABLE "${String(info.name)}"`);
+    db.prepare(`DELETE FROM "${MV}" WHERE name = ?`).run([String(info.name)]);
+    return `Materialized View ${String(info.name)} gelöscht.`;
+  }
+  if ((m = stmt.match(re(`^ALTER\\s+(TABLE|MATERIALIZED\\s+VIEW)\\s+"?(${ID})"?\\s+(NO\\s*INMEMORY|INMEMORY.*)$`, 'ius')))) {
+    const [, type, name, clause] = m;
+    const isMv = /MATERIALIZED/i.test(type);
+    if (isMv ? !mvInfo(db, name) : !findTable(db, name))
+      throw new OracleError(`${isMv ? 'Materialized View' : 'Tabelle'} ${name} existiert nicht.`, 'ORA-00942');
+    const c = clause.replace(/\s+/g, ' ').trim();
+    if (/^NO ?INMEMORY$/i.test(c)) return `${name} aus dem In-Memory Column Store entfernt.`;
+    if (!INMEMORY_CLAUSE.test(c))
+      throw new OracleError(
+        'Ungültige INMEMORY-Klausel. Form: INMEMORY [MEMCOMPRESS FOR QUERY|CAPACITY [LOW|HIGH]] [PRIORITY NONE|LOW|MEDIUM|HIGH|CRITICAL]',
+        'ORA-00905',
+      );
+    const comp = c.match(/MEMCOMPRESS FOR (QUERY|CAPACITY)( (LOW|HIGH))?/i);
+    const prio = c.match(/PRIORITY (\w+)/i)?.[1]?.toUpperCase() ?? 'NONE';
+    return `${name} für den In-Memory Column Store markiert (MEMCOMPRESS FOR ${comp ? `${comp[1].toUpperCase()} ${(comp[3] ?? 'LOW').toUpperCase()}` : 'QUERY LOW'}, PRIORITY ${prio}). Im Trainer ohne Wirkung auf die Laufzeit.`;
+  }
+  if ((m = stmt.match(re(`^CREATE\\s+(UNIQUE\\s+|BITMAP\\s+)?INDEX\\s+"?(${ID})"?\\s+ON\\s+"?(${ID})"?\\s*\\((.*)\\)$`, 'ius')))) {
+    const [, kind, name, table, cols] = m;
+    const t = findTable(db, table);
+    if (!t) throw new OracleError(`Tabelle ${table} existiert nicht.`, 'ORA-00942');
+    db.exec(`CREATE ${/UNIQUE/i.test(kind ?? '') ? 'UNIQUE ' : ''}INDEX "${name}" ON "${t}" (${cols})`);
+    const bitmap = /BITMAP/i.test(kind ?? '');
+    return `${bitmap ? 'Bitmap-Index' : /UNIQUE/i.test(kind ?? '') ? 'Eindeutiger Index' : splitTopLevel(cols).length > 1 ? 'Composite Index' : 'Index'} ${name} erstellt${bitmap ? ' (im Trainer intern als normaler Index)' : ''}.`;
+  }
+  return undefined;
+}
+
 export function executeStatement(db: Database, raw: string): StatementResult {
   const stmt = raw.trim();
   let kw: string | undefined;
@@ -582,10 +728,13 @@ export function executeStatement(db: Database, raw: string): StatementResult {
     kw = stmt.match(/^\s*(\w+)/)?.[1]?.toUpperCase();
     checkOracleStatement(stmt, kw);
     let message: string;
+    const special = runDbs2Statement(db, stmt, kw);
+    if (special !== undefined) return { sql: stmt, ok: true, message: special };
     if (kw === 'COMMIT') {
       const v = deferredViolations(db);
       if (v.length) throw deferredCommitError(v);
-      message = 'Commit abgeschlossen.';
+      const refreshed = refreshOnCommit(db);
+      message = refreshed.length ? `Commit abgeschlossen. Materialized View(s) ${refreshed.join(', ')} aktualisiert (ON COMMIT).` : 'Commit abgeschlossen.';
     } else if (kw === 'CREATE' && /^CREATE\s+TABLE/i.test(stmt)) message = runCreateTable(db, stmt);
     else if (kw === 'DROP' && /^DROP\s+TABLE/i.test(stmt)) message = runDrop(db, stmt);
     else if (kw === 'ALTER') message = runAlter(db, stmt);
