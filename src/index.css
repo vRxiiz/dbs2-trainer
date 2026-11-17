@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* Alle Farben/Formen kommen aus Design-Tokens. Ein Theme = ein Block unten.
+   Neues Branding: Block kopieren, Werte aendern, in src/config.ts auswaehlen. */
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-accent: var(--accent);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-warn: var(--warn);
+  --color-data: var(--data);
+  --font-sans: var(--font);
+  --radius-card: var(--radius);
+}
+
+:root,
+[data-theme="neutral"] {
+  --brand: #1d4e89;
+  --brand-contrast: #ffffff;
+  --accent: #c2410c;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --line: #d9dde3;
+  --ink: #16202e;
+  --muted: #566070;
+  --ok: #166534;
+  --ok-bg: #e3f4e8;
+  --bad: #9f1239;
+  --bad-bg: #fde8ec;
+  /* Status- und Datenfarben sind bewusst unabhaengig vom Branding,
+     damit Diagramme in jedem Theme gleich lesbar bleiben */
+  --warn: #c98a0a;
+  --data: #2a6fb0;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 0.75rem;
+}
+
+/* TH Koeln: Farben aus dem Logo bzw. dem Stylesheet von th-koeln.de
+   (Rot #c60c0f, Orange #ea5b0c, Magenta #b62584). Schrift wie auf th-koeln.de:
+   Myriad Pro Semi Condensed, falls installiert, sonst Arial. Das Logo selbst ist
+   eine geschuetzte Marke und liegt nicht im Repository (siehe BRANDING.md). */
+[data-theme="th-koeln"] {
+  --brand: #c60c0f;
+  --brand-contrast: #ffffff;
+  --accent: #b62584;
+  --bg: #f4f4f4;
+  --font: "myriad-pro-semi-condensed", "Myriad Pro", Arial, Helvetica, sans-serif;
+}
+
+[data-theme="dark"] {
+  --brand: #7fb1ee;
+  --brand-contrast: #0b1320;
+  --accent: #f59e6b;
+  --bg: #0e141c;
+  --surface: #17202c;
+  --line: #2b3746;
+  --ink: #e8edf4;
+  --muted: #9aa7b8;
+  --ok: #86efac;
+  --ok-bg: #12301f;
+  --bad: #fda4b8;
+  --bad-bg: #3a1420;
+  --warn: #e0b04a;
+  --data: #6fa8e6;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Programmatisch fokussierter Hauptbereich (Seitenwechsel) braucht keinen sichtbaren Rahmen */
+#main:focus {
+  outline: none;
+}
+
+/* Touch-Geräte: größere Auswahlfelder, Trefferflächen mind. ca. 44 px */
+@media (pointer: coarse) {
+  input[type='radio'],
+  input[type='checkbox'] {
+    width: 1.375rem;
+    height: 1.375rem;
+    accent-color: var(--accent);
+  }
+  label:has(> input[type='radio']),
+  label:has(> input[type='checkbox']) {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+@media (pointer: coarse) {
+  main button,
+  main select {
+    min-height: 2.75rem;
+  }
+}
