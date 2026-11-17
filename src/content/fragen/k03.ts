@@ -1,0 +1,68 @@
+// Kapitel 3: Trigger
+import { q } from './q';
+
+const F = 'Folien Trigger';
+
+export const k03 = [
+  q('dyn-integritaet', '03-grundlagen', 'Welche Bedingung lässt sich nicht mit PK-, FK-, NOT NULL- oder CHECK-Constraints formulieren, sondern nur mit einem Trigger?', ['Bei einer Preisänderung ist eine Preissenkung nicht zulässig', 'Der Preis beträgt mindestens 10 €', 'Jede Rechnung hat ein Datum', 'Jedes Produkt hat eine eindeutige Nummer'], 0,
+    'Das ist eine dynamische Integritätsbedingung: Sie vergleicht alten und neuen Zustand. Das kann nur ein Trigger oder die Anwendung prüfen.', F),
+  q('trigger-def', '03-grundlagen', 'Was ist ein Trigger?', ['Eine Folge benutzerdefinierter Operationen, die das DBMS bei bestimmten Ereignissen automatisch startet', 'Eine Prozedur, die man manuell aufruft', 'Ein Index auf einer Spalte', 'Eine gespeicherte Abfrage'], 0,
+    'Trigger werden bei Ereignissen wie INSERT, UPDATE oder DELETE automatisch vom DBMS gefeuert.', F),
+  q('ecma', '03-grundlagen', 'Wofür steht ECMA bei aktiven Datenbanken?', ['Event, Condition, Execution Mode, Action', 'Error, Commit, Merge, Abort', 'Entity, Constraint, Mapping, Attribute', 'Event, Cursor, Mode, Answer'], 0,
+    'Ereignis, optionale Bedingung, Ausführungsart (Statement oder Row) und Aktion.', F),
+  q('trigger-parameter', '03-grundlagen', 'Welche Werte bekommt ein Trigger übergeben?', ['Nur die Transitionsvariablen :NEW und :OLD', 'Beliebige Parameter wie eine Prozedur', 'Den Namen des aufrufenden Benutzers als Parameter', 'Gar keine Werte'], 0,
+    'An Trigger kann man keine Parameter übergeben. Die einzigen übergebenen Werte sind :NEW und :OLD.', F),
+
+  q('before-wozu', '03-before-after', 'Wofür eignet sich ein BEFORE-Trigger besonders?', ['Integritätsprüfungen, die eine DML-Operation abbrechen sollen', 'Willkommensmails nach der Registrierung', 'Protokollieren nach dem Commit', 'Löschen der Tabelle'], 0,
+    'BEFORE feuert, bevor die Operation die Datenbank ändert, und ist ideal zum Prüfen und Abbrechen.', F),
+  q('after-wozu', '03-before-after', 'Wofür eignet sich ein AFTER-Trigger besonders?', ['Folgeoperationen, z. B. einen Eintrag in einer anderen Tabelle anlegen', 'Werte in :NEW verändern', 'Eine Operation billig vorab abbrechen', 'Den Primärschlüssel festlegen'], 0,
+    'AFTER feuert nach der Änderung und eignet sich für Folgeaktionen. Ein Abbruch ist auch möglich, aber aufwendiger.', F),
+  q('raise', '03-before-after', 'Was bewirkt RAISE_APPLICATION_ERROR(-20111, \'…\') in einem Trigger?', ['Die auslösende DML-Operation wird abgebrochen und zurückgerollt', 'Es wird nur eine Warnung ausgegeben, die Operation läuft weiter', 'Der Trigger wird deaktiviert', 'Die Tabelle wird gesperrt'], 0,
+    'Stellt der Trigger eine Verletzung fest, bricht RAISE_APPLICATION_ERROR die Operation mit Fehlermeldung ab.', F),
+  q('raise-nummer', '03-before-after', 'Welcher Fehlernummernbereich ist für RAISE_APPLICATION_ERROR vorgesehen?', ['-20000 bis -20999', '0 bis 999', '-1 bis -100', 'beliebige positive Zahlen'], 0,
+    'Benutzerdefinierte Fehler liegen zwischen -20000 und -20999, z. B. -20111 in den Folien.', 'Oracle-Dokumentation'),
+  q('new-setzen', '03-before-after', 'In welchem Trigger darf man :NEW.salary := 500; schreiben?', ['BEFORE … FOR EACH ROW', 'AFTER … FOR EACH ROW', 'Statement-Trigger', 'In jedem Trigger'], 0,
+    'Nur BEFORE-Row-Trigger können :NEW-Werte noch ändern, bevor sie gespeichert werden (Beispiel: unter 18 → 500 €).', 'Spickzettel Trigger'),
+
+  q('default-statement', '03-row-statement', 'Was ist ein Trigger ohne FOR EACH ROW?', ['Ein Statement-Trigger, der einmal pro Anweisung feuert', 'Ein Row-Trigger', 'Ein ungültiger Trigger', 'Ein INSTEAD-OF-Trigger'], 0,
+    'Statement-Trigger sind der Standard. Achtung: Dann gibt es kein :NEW/:OLD und kein WHEN.', F),
+  q('row-feuert', '03-row-statement', 'UPDATE coworkers SET age = age + 1; ändert 6 Zeilen. Wie oft feuert ein AFTER UPDATE … FOR EACH ROW-Trigger?', ['6-mal', '1-mal', '0-mal', '12-mal'], 0,
+    'Ein Row-Trigger feuert einmal je manipuliertem Datensatz. Ein Statement-Trigger würde nur einmal feuern.', F),
+  q('statement-ohne-zeilen', '03-row-statement', 'Feuert ein Statement-Trigger auch, wenn die Anweisung keine Zeile ändert?', ['Ja, einmal pro Anweisung', 'Nein, nie', 'Nur bei DELETE', 'Nur wenn FOR EACH ROW fehlt und WHEN gesetzt ist'], 0,
+    'Statement-Trigger laufen einmal je Anweisung, auch wenn keine Daten manipuliert werden.', F),
+  q('when-doppelpunkt', '03-row-statement', 'Wie schreibt man die Transitionsvariablen in der WHEN-Klausel?', ['Ohne Doppelpunkt: WHEN (NEW.age > OLD.age)', 'Mit Doppelpunkt: WHEN (:NEW.age > :OLD.age)', 'Als Parameter: WHEN (p_new > p_old)', 'Gar nicht, WHEN erlaubt keine Transitionsvariablen'], 0,
+    'In der WHEN-Klausel ohne Doppelpunkt, im Rumpf mit Doppelpunkt.', F),
+  q('when-select', '03-row-statement', 'Was ist in der WHEN-Bedingung eines Triggers nicht erlaubt?', ['SELECT-Anweisungen', 'Vergleichsoperatoren', 'SYSDATE', 'NEW und OLD'], 0,
+    'WHEN erlaubt Vergleiche, Built-in-Funktionen und NEW/OLD, aber keine Abfragen. Abfragen gehören in den Rumpf.', F),
+  q('new-old-event', '03-row-statement', 'Welche Transitionsvariablen sind bei einem DELETE-Trigger belegt?', ['Nur :OLD', 'Nur :NEW', ':OLD und :NEW', 'Keine'], 0,
+    'INSERT: nur :NEW. UPDATE: :OLD und :NEW. DELETE: nur :OLD.', F),
+  q('update-of', '03-row-statement', 'Wozu dient UPDATE OF salary ON coworkers?', ['Der Trigger feuert nur, wenn die Spalte salary geändert wird', 'Der Trigger ändert automatisch salary', 'Der Trigger feuert bei jedem INSERT', 'Die Spalte salary wird gesperrt'], 0,
+    'Mit OF spalte reagiert ein UPDATE-Trigger nur auf Änderungen bestimmter Spalten.', F),
+
+  q('inserting', '03-events', 'Wie unterscheidet man in einem Trigger für INSERT OR UPDATE OR DELETE, welches Ereignis eingetreten ist?', ['IF INSERTING THEN … ELSIF UPDATING THEN … ELSIF DELETING THEN …', 'IF :EVENT = \'INSERT\'', 'Mit drei WHEN-Klauseln', 'Das ist nicht möglich'], 0,
+    'Die Prädikate INSERTING, UPDATING und DELETING verraten das auslösende Ereignis.', F),
+  q('signal-entlassen', '03-events', '„Wird ein Mitarbeitender entlassen, darf niemand gelöscht werden, der vor weniger als 6 Monaten eingestellt wurde.“ Welches Ereignis passt?', ['BEFORE DELETE ON coworkers FOR EACH ROW', 'AFTER INSERT ON coworkers', 'BEFORE UPDATE OF salary ON coworkers', 'INSTEAD OF DELETE ON coworkers'], 0,
+    'Entlassen = Löschen. Prüfen und abbrechen = BEFORE. Bezug auf :OLD.hiring_date = Row-Trigger.', 'Übung Trigger a'),
+  q('check-vs-trigger', '03-events', 'Was kann ein Trigger, was ein CHECK-Constraint nicht kann?', ['Auf andere Tabellen zugreifen, z. B. das Alter des Leaders in COWORKERS prüfen', 'Spaltenwerte vergleichen', 'NULL-Werte verbieten', 'Einen Primärschlüssel definieren'], 0,
+    'CHECK darf nur die eigene Tabelle prüfen. Ein Trigger auf PROJECTS kann per SELECT INTO in COWORKERS nachsehen.', F),
+  q('name-trigger', '03-events', 'Was empfiehlt die Vorlesung, wenn INSERT, UPDATE und DELETE auf einer Tabelle ganz unterschiedliche Aktionen brauchen?', ['Für jede Aktion einen eigenen, passend benannten Trigger', 'Alles in einen Trigger mit beliebigem Namen', 'Gar keine Trigger verwenden', 'Einen Statement-Trigger für alles'], 0,
+    'Ein Trigger soll genau das tun, was sein Name beschreibt. Ähnliche Aktionen darf man zusammenfassen.', F),
+
+  q('mutating', '03-mutating', 'Wann tritt das Mutating-Table-Problem auf?', ['Ein Row-Trigger liest oder ändert die Tabelle, auf der er gerade feuert', 'Ein Statement-Trigger liest eine andere Tabelle', 'Eine View wird abgefragt', 'Zwei Trigger haben denselben Namen'], 0,
+    'Während der Änderung sieht ein Row-Trigger einen Zwischenzustand der eigenen Tabelle. Oracle sperrt diesen Zugriff.', F),
+  q('mutating-loesung', '03-mutating', 'Welche Lösungen für das Mutating-Table-Problem zeigt die Vorlesung?', ['Statement- statt Row-Trigger', 'Compound Trigger', 'Den Trigger mit COMMIT beenden', 'Den Fremdschlüssel löschen'], [0, 1],
+    'Statement-Trigger verursachen das Problem nicht (haben aber kein :NEW). Compound Trigger kombinieren Row-Teile (Werte merken) mit einem AFTER STATEMENT-Teil.', F),
+  q('compound-teile', '03-mutating', 'Welche Abschnitte kann ein Compound Trigger haben?', ['BEFORE STATEMENT', 'BEFORE EACH ROW', 'AFTER EACH ROW', 'AFTER STATEMENT'], [0, 1, 2, 3],
+    'Alle vier Zeitpunkte. Variablen im Deklarationsteil gelten über die ganze Anweisung.', F),
+  q('compound-wo-select', '03-mutating', 'Wo gehört im Compound Trigger das SELECT auf die eigene Tabelle hin?', ['In den AFTER STATEMENT-Teil, mit den in EACH ROW gemerkten Werten', 'In den BEFORE EACH ROW-Teil', 'In die WHEN-Klausel', 'Vor das CREATE'], 0,
+    'In den Row-Teilen werden :NEW-Werte in Variablen gemerkt, im AFTER STATEMENT-Teil sind Abfragen auf die Tabelle wieder erlaubt.', F),
+  q('compound-syntax', '03-mutating', 'Wie beginnt ein Compound Trigger?', ['CREATE OR REPLACE TRIGGER t FOR INSERT ON projects COMPOUND TRIGGER', 'CREATE COMPOUND TRIGGER t BEFORE INSERT ON projects', 'CREATE TRIGGER t AFTER EACH ROW ON projects', 'CREATE TRIGGER t COMPOUND ON projects FOR EACH ROW'], 0,
+    'Syntax: … FOR {INSERT|UPDATE|DELETE} ON tabelle COMPOUND TRIGGER, ohne BEFORE/AFTER davor.', F),
+
+  q('testen-rollback', '03-testen', 'Wie testet man einen Trigger laut Vorlesung?', ['Mit DML-Anweisungen für erlaubte und verbotene Fälle, danach jeweils ROLLBACK', 'Mit EXEC trigger_name', 'Mit SELECT trigger_name FROM dual', 'Gar nicht, Trigger testen sich selbst'], 0,
+    'Trigger feuern implizit. Getestet wird mit INSERT/UPDATE/DELETE, kontrolliert mit SELECT und zurückgesetzt mit ROLLBACK.', F),
+  q('disable', '03-testen', 'Wie deaktiviert man alle Trigger der Tabelle coworkers?', ['ALTER TABLE coworkers DISABLE ALL TRIGGERS;', 'DROP TRIGGER ALL ON coworkers;', 'DISABLE TRIGGER coworkers;', 'ALTER TRIGGER coworkers OFF;'], 0,
+    'ALTER TABLE tabelle {DISABLE | ENABLE} {triggername | ALL TRIGGERS}.', F),
+  q('drop-table-cascade', '03-testen', 'Was bleibt nach DROP TABLE coworkers CASCADE CONSTRAINTS bestehen?', ['Views auf die Tabelle (aber ungültig)', 'Trigger der Tabelle', 'Indexe der Tabelle', 'Die Daten'], 0,
+    'Gelöscht werden Definition, Daten, Trigger, Constraints und Indexe. Views bleiben, sind aber invalid.', F),
+];

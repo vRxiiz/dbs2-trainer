@@ -1,0 +1,51 @@
+// Kapitel 4: Views und Materialized Views
+import { q } from './q';
+
+const F = 'Folien Views und MVs';
+
+export const k04 = [
+  q('view-def', '04-views', 'Was ist eine View?', ['Eine virtuelle Tabelle, die dynamisch aus anderen Tabellen abgeleitet wird', 'Eine physische Kopie einer Tabelle', 'Ein Index', 'Eine gespeicherte Prozedur'], 0,
+    'Eine View speichert nur die Abfrage. Bei jedem Zugriff wird sie aus den Basistabellen berechnet.', F),
+  q('view-vorteile', '04-views', 'Welche Vorteile von Views nennt die Vorlesung?', ['Vereinfachung des Datenretrievals', 'Logische Datenunabhängigkeit', 'Datensicherheit', 'Daten werden physisch schneller gespeichert'], [0, 1, 2],
+    'Views vereinfachen Abfragen, entkoppeln Anwendungen vom Schema und zeigen nur freigegebene Daten. Gespeichert wird bei einer normalen View nichts.', F),
+  q('view-unabhaengig', '04-views', 'Die Spalte TOPIC in PROJECTS wird in AREA umbenannt. Was muss bei einer Anwendung geändert werden, die nur auf die View project_lead_data zugreift?', ['Nur die View-Definition (p.area AS topic), die Anwendung bleibt unverändert', 'Jede Abfrage der Anwendung', 'Die Anwendung muss neu kompiliert werden', 'Nichts, auch die View läuft automatisch weiter'], 0,
+    'Logische Datenunabhängigkeit: Man passt die View an, die Schnittstelle zur Anwendung bleibt gleich.', 'Folien Kopplungstechniken'),
+  q('view-sicherheit', '04-views', 'Datenanalysten sollen nur aggregierte Daten sehen. Wie setzt man das um?', ['Eine View mit den Aggregaten anlegen und nur darauf GRANT SELECT vergeben', 'Den Analysten alle Tabellen freigeben', 'Einen Trigger auf die Tabellen legen', 'Einen Bitmap-Index anlegen'], 0,
+    'Views zeigen nur den freigegebenen Ausschnitt. Rechte verteilt man mit GRANT und REVOKE auf die View.', F),
+  q('view-aktuell', '04-views', 'Ein Name in der Basistabelle wird geändert. Was zeigt eine normale View danach?', ['Sofort den neuen Namen', 'Den alten Namen bis zum Refresh', 'Einen Fehler', 'Nichts mehr'], 0,
+    'Eine View liest bei jedem Zugriff live aus den Basistabellen.', 'Übung Views, Aufgabe 3b'),
+  q('view-syntax', '04-views', 'Welche Anweisung legt eine View an oder ersetzt eine vorhandene?', ['CREATE OR REPLACE VIEW v AS SELECT …', 'CREATE TABLE v AS VIEW SELECT …', 'ALTER VIEW v SET SELECT …', 'INSERT INTO VIEW v SELECT …'], 0,
+    'CREATE [OR REPLACE] VIEW name [(spalten)] AS SELECT …', F),
+  q('view-abfrage', '04-views', 'Wie fragt man eine View ab?', ['Wie eine Tabelle: SELECT … FROM view_name', 'Nur über EXEC view_name', 'Mit CALL view_name()', 'Nur innerhalb von PL/SQL'], 0,
+    'Für DQL verhält sich eine View wie eine normale Tabelle.', F),
+
+  q('mv-def', '04-mv', 'Was unterscheidet eine Materialized View von einer View?', ['Ihr Ergebnis wird physisch gespeichert und muss aktualisiert werden', 'Sie kann keine Joins enthalten', 'Sie ist immer aktuell', 'Sie kann nicht abgefragt werden'], 0,
+    'Die MV speichert die Datensätze. Vorteil: keine Neuberechnung. Problem: Aktualität, daher REFRESH.', F),
+  q('build-immediate', '04-mv', 'Was bedeutet BUILD IMMEDIATE?', ['Die MV wird sofort beim Anlegen mit Daten befüllt', 'Die MV wird erst beim ersten Refresh befüllt', 'Die MV wird bei jedem Commit befüllt', 'Die MV wird nie befüllt'], 0,
+    'IMMEDIATE (Default): sofort befüllt. DEFERRED: erst beim ersten Refresh.', F),
+  q('refresh-arten', '04-mv', 'Was macht REFRESH FORCE?', ['Versucht einen Fast Refresh und macht sonst einen Complete Refresh', 'Leert die MV und füllt sie immer komplett neu', 'Aktualisiert nur Änderungen und bricht sonst ab', 'Erzwingt ein Refresh bei jedem SELECT'], 0,
+    'FAST: nur Änderungen. COMPLETE: leeren und neu füllen. FORCE (Default): erst FAST versuchen, sonst COMPLETE.', F),
+  q('on-commit', '04-mv', 'Warum ist ON COMMIT laut Vorlesung oft nicht ratsam?', ['Bei vielen Commits wird sehr oft aktualisiert und der Vorteil der MV geht verloren', 'ON COMMIT gibt es in Oracle nicht', 'Die MV wird dann nie aktualisiert', 'Commits werden dadurch verboten'], 0,
+    'Jeder Commit auf den Stammtabellen löst ein Refresh aus.', F),
+  q('on-demand', '04-mv', 'Wie wird eine MV mit ON DEMAND aktualisiert?', ['Durch expliziten Aufruf, z. B. DBMS_MVIEW.REFRESH(\'mv\') in einem PL/SQL-Block', 'Automatisch bei jedem SELECT', 'Bei jedem COMMIT', 'Gar nicht'], 0,
+    'ON DEMAND: manuell, per Prozedur, Trigger oder Scheduler.', F),
+  q('start-with', '04-mv', 'Wie lässt man eine MV sofort und dann alle 30 Minuten aktualisieren?', ['START WITH SYSDATE NEXT SYSDATE + 30/1440', 'START WITH 30 MINUTES', 'ON COMMIT EVERY 30', 'REFRESH EVERY 30/60'], 0,
+    'Ein Tag hat 1440 Minuten. START WITH gibt den ersten Refresh an, NEXT das Intervall. ON DEMAND ist dann nicht nötig.', 'Übung Views, Aufgabe 2a'),
+  q('signal-mv-klausur', '04-mv', '„Soll sofort befüllt werden und sich nur auf expliziten Befehl komplett aktualisieren.“ Welche Optionen passen?', ['BUILD IMMEDIATE REFRESH COMPLETE ON DEMAND', 'BUILD DEFERRED REFRESH FAST ON COMMIT', 'BUILD IMMEDIATE REFRESH FORCE ON COMMIT', 'BUILD DEFERRED REFRESH COMPLETE START WITH SYSDATE'], 0,
+    'Sofort befüllt = IMMEDIATE, komplett = COMPLETE, explizit = ON DEMAND.', 'Altklausur, Aufgabe 2.1'),
+  q('mv-index', '04-mv', 'Kann man auf einer Materialized View Indexe anlegen?', ['Ja, einzelne und zusammengesetzte; sie werden beim Refresh angepasst', 'Nein, nur auf Tabellen', 'Nur Bitmap-Indexe', 'Nur, wenn die MV leer ist'], 0,
+    'CREATE [BITMAP | UNIQUE] INDEX name ON mv(spalte). Beim Refresh werden die Indexe automatisch angepasst.', F),
+  q('mv-einsatz', '04-mv', 'Wo setzt man Materialized Views typischerweise ein?', ['Data-Warehouse-Umgebungen mit teuren Joins und Aggregaten', 'Für Tabellen mit sehr vielen INSERTs pro Sekunde', 'Als Ersatz für Primärschlüssel', 'Nur für Testdaten'], 0,
+    'MVs sind ein Tuningmittel für komplexe Aggregate auf großen Tabellen, gemessen mit dem Explain Plan.', F),
+  q('mv-nicht-aktuell', '04-mv', 'Ein INSTEAD-OF-Trigger ändert den Namen einer Bienenart. Warum zeigt die MV den alten Namen noch?', ['Die MV ist eine gespeicherte Kopie und zeigt Änderungen erst nach dem nächsten Refresh', 'Der Trigger wirkt nur auf MVs', 'Die View wurde gelöscht', 'Die Änderung wurde zurückgerollt'], 0,
+    'View = live, MV = Schnappschuss bis zum Refresh.', 'Übung Views, Aufgabe 3b'),
+
+  q('insteadof-wozu', '04-insteadof', 'Wozu dient ein INSTEAD-OF-Trigger?', ['Schreiboperationen auf einer View in Änderungen der Basistabellen umzusetzen', 'Eine Tabelle vor dem Löschen zu sichern', 'Den Refresh einer MV zu steuern', 'Einen Index zu ersetzen'], 0,
+    'Statt die View zu ändern, ändert der Trigger die zugrunde liegende Tabelle.', F),
+  q('insteadof-syntax', '04-insteadof', 'Wie beginnt ein INSTEAD-OF-Trigger für Namensänderungen über die View project_lead_data?', ['CREATE OR REPLACE TRIGGER t INSTEAD OF UPDATE ON project_lead_data FOR EACH ROW', 'CREATE TRIGGER t BEFORE UPDATE ON project_lead_data', 'CREATE TRIGGER t INSTEAD OF UPDATE ON coworkers', 'CREATE VIEW TRIGGER t ON project_lead_data'], 0,
+    'INSTEAD OF steht auf der View und ist immer ein Row-Trigger.', F),
+  q('insteadof-rumpf', '04-insteadof', 'Was steht typischerweise im Rumpf eines INSTEAD-OF UPDATE-Triggers auf einer View?', ['UPDATE basistabelle SET spalte = :NEW.spalte WHERE id = :OLD.id;', 'UPDATE view SET spalte = :NEW.spalte;', 'COMMIT;', 'DBMS_MVIEW.REFRESH(\'view\');'], 0,
+    'Der Trigger überträgt die Änderung mit :NEW und :OLD auf die Basistabelle.', 'Spickzettel'),
+  q('insteadof-oracle', '04-insteadof', 'Welche Aussagen zu INSTEAD-OF-Triggern sind richtig?', ['Sie werden auf Views definiert', 'Sie sind Oracle-spezifisch', 'Sie feuern zusätzlich zur Änderung der View', 'Sie können nur bei INSERT verwendet werden'], [0, 1],
+    'INSTEAD OF ersetzt die Operation auf der View (nicht zusätzlich) und geht für INSERT, UPDATE und DELETE.', F),
+];
