@@ -12,7 +12,7 @@ describe('Katalog', () => {
     const topic = (id: string) => catalog.find((c) => c.id === id)?.topicId;
     expect(topic('calc:btree')).toBe('01-bbaum');
     expect(topic('calc:bitmap')).toBe('01-bitmap');
-    for (const v of ['rle', 'bitvektor', 'dictionary', 'for', 'differential'])
+    for (const v of ['lauflaenge', 'bitvektor', 'dictionary', 'for', 'differenz'])
       expect(topic(`calc:komp:${v}`)).toBe('05-kompression');
   });
   it('verlinkt jedes Kapitel auf eine Übungsseite', () => {

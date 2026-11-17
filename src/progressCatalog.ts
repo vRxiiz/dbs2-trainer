@@ -9,7 +9,7 @@ import { mastery, passStreak, type ProgressData } from './progress';
 export const CHAPTERS: Chapter[] = [...BUILTIN_CHAPTERS];
 
 /** Verfahren des Kompressions-Trainers */
-export const KOMP_VERFAHREN = ['rle', 'bitvektor', 'dictionary', 'for', 'differential'] as const;
+export const KOMP_VERFAHREN = ['lauflaenge', 'bitvektor', 'dictionary', 'for', 'differenz'] as const;
 
 export type CatalogItem = { id: string; topicId: string; kind: 'uebung' | 'frage' };
 
