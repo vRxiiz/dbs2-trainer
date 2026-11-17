@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
+import { Chips } from '../components/Chips';
 import { LEVEL_NAME, scenarios } from '../content/scenarios';
-import { sqlExercises } from '../content/sqlExercises';
 import { topicById, topicsOf } from '../content/topics';
+import { viewExercises } from '../content/viewExercises';
 import { useProgress } from '../progress';
 
-type Filter = { scenario: string; level: 0 | 1 | 2 | 3; kind: '' | 'dql' | 'dml'; topic: string };
-// Hier gibt es nur DML-Aufgaben. Abfragen (DQL) folgen in einem eigenen Bereich.
-const DML_ONLY = sqlExercises.filter((e) => e.kind === 'dml');
-const KEY = 'dbt:sql-filter';
+type Filter = { scenario: string; level: 0 | 1 | 2 | 3; topic: string };
+const ALL = viewExercises;
+const KEY = 'dbs2:views-filter';
 
 function loadFilter(): Filter {
   try {
@@ -16,35 +16,7 @@ function loadFilter(): Filter {
   } catch {
     /* ignorieren */
   }
-  return { scenario: '', level: 0, kind: '', topic: '' };
-}
-
-function Chips<T extends string | number>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: [T, string][];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={label}>
-      <span className="w-28 text-sm font-semibold">{label}</span>
-      {options.map(([v, l]) => (
-        <button
-          key={String(v)}
-          aria-pressed={value === v}
-          onClick={() => onChange(v)}
-          className={`rounded-full border px-3 py-1 text-sm ${value === v ? 'border-brand bg-brand text-brand-contrast' : 'border-line bg-surface'}`}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
+  return { scenario: '', level: 0, topic: '' };
 }
 
 export function SqlList() {
@@ -62,9 +34,9 @@ export function SqlList() {
 
   const list = useMemo(
     () =>
-      DML_ONLY.filter(
+      ALL.filter(
         (e) =>
-          (!f.scenario || (e.scenario ?? 'hochschule') === f.scenario) &&
+          (!f.scenario || (e.scenario ?? 'coworkers') === f.scenario) &&
           (!f.level || e.level === f.level) &&
           (!f.topic || e.topicId === f.topic),
       ),
@@ -73,28 +45,25 @@ export function SqlList() {
   const open = list.filter((e) => !d.done.includes(`sql:${e.id}`));
   const random = () => {
     const pool = open.length ? open : list;
-    if (pool.length) location.hash = `#/sql/${pool[Math.floor(Math.random() * pool.length)].id}`;
+    if (pool.length) location.hash = `#/views/${pool[Math.floor(Math.random() * pool.length)].id}`;
   };
   const groups = scenarios
-    .map((s) => ({ s, items: list.filter((e) => (e.scenario ?? 'hochschule') === s.id) }))
+    .map((s) => ({ s, items: list.filter((e) => (e.scenario ?? 'coworkers') === s.id) }))
     .filter((g) => g.items.length);
 
   return (
     <>
-      <a href="#/dml" className="inline-block py-2 text-sm underline">
-        ← SQL-DML
-      </a>
-      <h1 className="mt-2 text-3xl font-bold">Daten ändern (INSERT, UPDATE, DELETE)</h1>
+      <h1 className="mt-2 text-3xl font-bold">Views und Materialized Views</h1>
       <p className="mt-2 max-w-2xl text-muted">
-        Fall-Datenbanken nach Beispielen aus der Vorlesung, jeweils mit Aufgaben in drei Schwierigkeitsgraden. Bewertet wird das
-        Ergebnis, nicht die Schreibweise, auf den sichtbaren und auf verdeckten Daten.
+        Views anlegen und abfragen auf den Übungsdatenbanken. Bewertet wird der Inhalt der View bzw. das Ergebnis der Abfrage,
+        nicht die Schreibweise, auf den sichtbaren und auf verdeckten Daten.
       </p>
 
       <section className="mt-6 space-y-3 rounded-card border border-line bg-surface p-5">
         <Chips
           label="Datenbank"
           value={f.scenario}
-          options={[['', 'Alle'], ...scenarios.filter((s) => DML_ONLY.some((e) => (e.scenario ?? 'hochschule') === s.id)).map((s) => [s.id, s.name] as [string, string])]}
+          options={[['', 'Alle'], ...scenarios.filter((s) => ALL.some((e) => (e.scenario ?? 'coworkers') === s.id)).map((s) => [s.id, s.name] as [string, string])]}
           onChange={(v) => update({ scenario: v })}
         />
         <Chips
@@ -111,7 +80,7 @@ export function SqlList() {
         <Chips
           label="Thema"
           value={f.topic}
-          options={[['', 'Alle'], ...topicsOf('SQL').map((t) => [t.id, t.title] as [string, string])]}
+          options={[['', 'Alle'], ...topicsOf('04').filter((t) => ALL.some((e) => e.topicId === t.id)).map((t) => [t.id, t.title] as [string, string])]}
           onChange={(v) => update({ topic: v })}
         />
         <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
@@ -125,8 +94,8 @@ export function SqlList() {
           <span className="text-sm text-muted">
             {list.length} Aufgaben, davon {list.length - open.length} gelöst
           </span>
-          <a href="#/sql/spielwiese" className="ml-auto text-sm underline">
-            Spielwiese: freie Abfragen und Änderungen →
+          <a href="#/spielwiese" className="ml-auto text-sm underline">
+            Spielwiese: freie Abfragen und Views →
           </a>
         </div>
       </section>
@@ -142,11 +111,11 @@ export function SqlList() {
             {items.map((ex) => (
               <li key={ex.id}>
                 <a
-                  href={`#/sql/${ex.id}`}
+                  href={`#/views/${ex.id}`}
                   className="flex h-full flex-col rounded-card border border-line bg-surface p-4 no-underline hover:border-brand"
                 >
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    {LEVEL_NAME[ex.level]} · Änderung
+                    {LEVEL_NAME[ex.level]} · {ex.kind === 'view' ? 'View anlegen' : 'Abfrage'}
                     {d.done.includes(`sql:${ex.id}`) && <span className="ml-2 text-ok">✓ gelöst</span>}
                   </span>
                   <span className="mt-1 font-bold">{ex.title}</span>

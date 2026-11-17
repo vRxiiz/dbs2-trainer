@@ -50,6 +50,8 @@ export function toChar(value: unknown, fmt?: unknown): string | null {
 }
 
 export function registerOracleFunctions(db: Database) {
+  db.create_function('EXTRACT_PART', (part: unknown, v: unknown) => extractPart(String(part), v) as never);
+  db.create_function('ADD_MONTHS', (v: unknown, n: unknown) => addMonths(v, Number(n)) as never);
   db.create_function('NVL', (a: unknown, b: unknown) => (a == null ? b : a) as never);
   db.create_function('TO_DATE', (v: unknown, f: unknown) => toDate(v, f ?? 'DD.MM.YYYY') as never);
   db.create_function('TO_CHAR', (v: unknown, f: unknown) => toChar(v, f) as never);
@@ -75,6 +77,29 @@ export function registerOracleFunctions(db: Database) {
   db.exec('PRAGMA case_sensitive_like=ON');
   // DUAL wie in Oracle
   db.exec("CREATE TABLE IF NOT EXISTS DUAL (DUMMY VARCHAR2(1)); INSERT INTO DUAL VALUES ('X');");
+}
+
+/** EXTRACT(YEAR|MONTH|DAY FROM datum) auf ISO-Datumswerten */
+function extractPart(part: string, v: unknown): number | null {
+  if (v == null) return null;
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return Number(part === 'YEAR' ? m[1] : part === 'MONTH' ? m[2] : m[3]);
+}
+
+/** ADD_MONTHS wie Oracle: Monatsende bleibt Monatsende, zu grosse Tage werden gekappt */
+function addMonths(v: unknown, n: number): string | null {
+  if (v == null) return null;
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})(.*)$/);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const lastDay = (yy: number, mm: number) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const total = y * 12 + (mo - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  const nd = d === lastDay(y, mo) ? lastDay(ny, nm) : Math.min(d, lastDay(ny, nm));
+  const p2 = (x: number) => String(x).padStart(2, '0');
+  return `${ny}-${p2(nm)}-${p2(nd)}${m[4]}`;
 }
 
 /* ---------------- Textwerkzeuge ---------------- */
@@ -123,6 +148,7 @@ export function rewriteQuery(stmt: string): string {
   return outsideStrings(stmt, (p) =>
     p
       .replace(/\bSYSDATE\b/gi, "date('now')")
+      .replace(/\bEXTRACT\s*\(\s*(YEAR|MONTH|DAY)\s+FROM\s+/gi, (_, part: string) => `EXTRACT_PART('${part.toUpperCase()}', `)
       .replace(/\bMINUS\b/gi, 'EXCEPT')
       .replace(/\bFETCH\s+(?:FIRST|NEXT)\s+(\d+)\s+ROWS?\s+ONLY\b/gi, 'LIMIT $1')
       .replace(/\bOFFSET\s+(\d+)\s+ROWS?\b/gi, 'OFFSET $1'),

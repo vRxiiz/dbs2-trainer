@@ -1,13 +1,12 @@
-// Fall-Datenbanken (Szenarien) fuer DQL/DML. Jedes Szenario hat einen sichtbaren
-// Datenbestand A und einen verdeckten Datenbestand B mit gleicher Struktur, aber
-// anderen Werten: Wer Werte fest eintraegt statt Bedingungen zu formulieren, faellt auf.
-//
-// Neues Szenario: Datei in content/scenarios/ anlegen und hier eintragen.
+// Fall-Datenbanken der DBS2-Uebungen. Jedes Szenario hat einen sichtbaren Datenbestand A
+// und einen verdeckten Datenbestand B mit gleicher Struktur, aber anderen Werten:
+// Wer Werte fest eintraegt statt Bedingungen zu formulieren, faellt auf.
 
-import { DATA_A, DATA_B, HOCHSCHULE_SCHEMA, HOCHSCHULE_TABLES } from './hochschule';
-import { GASTRO_A, GASTRO_B, GASTRO_RELATIONS, GASTRO_SCHEMA } from './scenarios/gastro';
-import { MARKTPLATZ_A, MARKTPLATZ_B, MARKTPLATZ_RELATIONS, MARKTPLATZ_SCHEMA, MARKTPLATZ_TABLES } from './scenarios/marktplatz';
-import { PROJEKTE_A, PROJEKTE_B, PROJEKTE_RELATIONS, PROJEKTE_SCHEMA } from './scenarios/projekte';
+import { COWORKERS_A, COWORKERS_B, COWORKERS_RELATIONS, COWORKERS_SCHEMA } from './scenarios/coworkers';
+import { HONIG_A, HONIG_B, HONIG_RELATIONS, HONIG_SCHEMA } from './scenarios/honig';
+import { HOTEL_A, HOTEL_B, HOTEL_RELATIONS, HOTEL_SCHEMA } from './scenarios/hotel';
+
+export { LEVEL_NAME } from './chapters';
 
 export interface Scenario {
   id: string;
@@ -26,68 +25,38 @@ export interface Scenario {
 
 export const scenarios: Scenario[] = [
   {
-    id: 'hochschule',
-    name: 'Hochschule',
-    description: 'Fachbereiche, Professorinnen und Professoren, Studierende, Kurse und Anmeldungen mit Noten.',
-    origin: 'Übung 05 (Kurs, Student, Anmelden), Skript 04/05 (Prof, Fachbereich)',
-    schema: HOCHSCHULE_SCHEMA,
-    dataA: DATA_A,
-    dataB: DATA_B,
-    tables: HOCHSCHULE_TABLES,
-    relations: [
-      'Fachbereich (FB_Nr, FB_Name)',
-      'Prof (P_Nr, Name, FB_Nr <fk>, Raum)',
-      'Student (Matrikelnummer, Namen, Studiengang, Semester, Geburtsdatum)',
-      'Kurs (Kurs_ID, Bezeichnung, ECTS, P_Nr <fk>)',
-      'Anmelden (Kurs_ID <fk>, Matrikelnummer <fk>, Anmeldedatum, Note)',
-    ],
+    id: 'coworkers',
+    name: 'Coworkers/Projects',
+    description: 'Mitarbeitende mit Alter, Adresse, Gehalt und Einstellungsdatum, Projekte mit Projektleitung.',
+    origin: 'Übungen PL/SQL, Trigger und Views (rekonstruiert, Original in ILU)',
+    schema: COWORKERS_SCHEMA,
+    dataA: COWORKERS_A,
+    dataB: COWORKERS_B,
+    tables: ['coworkers', 'projects'],
+    relations: COWORKERS_RELATIONS,
   },
   {
-    id: 'gastro',
-    name: 'Gastro',
-    description: 'Bars, Cocktails, Zutaten, Rezepte und die Getränkekarte jeder Bar mit Preisen.',
-    origin: 'Skript 01/02: Datenbank für einen Gastroüberblick (Bars, Cocktails, Zutaten)',
-    schema: GASTRO_SCHEMA,
-    dataA: GASTRO_A,
-    dataB: GASTRO_B,
-    tables: ['Bar', 'Cocktail', 'Zutat', 'Rezept', 'Karte'],
-    relations: GASTRO_RELATIONS,
+    id: 'honig',
+    name: 'Honigernten',
+    description: 'Bienenvölker sammeln Honigernten, jede Ernte hat einen Honigtyp und eine Abpackung.',
+    origin: 'Übung Views (rekonstruiert, Original in ILU)',
+    schema: HONIG_SCHEMA,
+    dataA: HONIG_A,
+    dataB: HONIG_B,
+    tables: ['bienenvolk', 'honigtyp', 'abpackung', 'honigernte', 'gesammelt'],
+    relations: HONIG_RELATIONS,
   },
   {
-    id: 'projekte',
-    name: 'Projekte',
-    description: 'Abteilungen, Mitarbeitende mit Vorgesetzten (Selbstreferenz), Projekte und Rollen.',
-    origin: 'Skript 03–05: Mitarbeiterin arbeitet in Projekt mit Rolle, Vorgesetzte, Abteilung',
-    schema: PROJEKTE_SCHEMA,
-    dataA: PROJEKTE_A,
-    dataB: PROJEKTE_B,
-    tables: ['Abteilung', 'Mitarbeiter', 'Projekt', 'Arbeitet_in'],
-    relations: PROJEKTE_RELATIONS,
-  },
-  {
-    id: 'marktplatz',
-    name: 'Marktplatz',
-    description: 'Nutzerinnen als Kundinnen oder Herstellerinnen, Artikel aus Komponenten und Käufe, mit den Constraints aus Übung 5.',
-    origin: 'Übung 5 (Nutzer/Artikel/Komponente) und Übung 6 (DML)',
-    schema: MARKTPLATZ_SCHEMA,
-    dataA: MARKTPLATZ_A,
-    dataB: MARKTPLATZ_B,
-    tables: MARKTPLATZ_TABLES,
-    relations: MARKTPLATZ_RELATIONS,
-  },
-  {
-    id: 'marktplatz-leer',
-    name: 'Marktplatz (leer)',
-    description: 'Dieselben Tabellen wie im Marktplatz, aber ohne Daten: zum Einfügen eigener Datensätze.',
-    origin: 'Übung 6 Aufgabe 2a',
-    schema: MARKTPLATZ_SCHEMA,
-    dataA: '',
-    dataB: '',
-    tables: MARKTPLATZ_TABLES,
-    relations: MARKTPLATZ_RELATIONS,
+    id: 'hotel',
+    name: 'Hotelbuchungen',
+    description: 'Reiseunternehmen „Spring ins Land“: Kunden buchen Einzel- und Doppelzimmer in Hotels verschiedener Städte.',
+    origin: 'Altklausur DBS2 (rekonstruiert)',
+    schema: HOTEL_SCHEMA,
+    dataA: HOTEL_A,
+    dataB: HOTEL_B,
+    tables: ['stadt', 'hotel', 'kunde', 'buchung', 'temp_data'],
+    relations: HOTEL_RELATIONS,
   },
 ];
 
-export const scenarioById = (id = 'hochschule'): Scenario => scenarios.find((s) => s.id === id) ?? scenarios[0];
-
-export const LEVEL_NAME = { 1: 'Leicht', 2: 'Mittel', 3: 'Schwer' } as const;
+export const scenarioById = (id = 'coworkers'): Scenario => scenarios.find((s) => s.id === id) ?? scenarios[0];

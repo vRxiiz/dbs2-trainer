@@ -69,4 +69,11 @@ SELECT COUNT(*) FROM coworkers;`);
     expect(r.at(-2)!.message).toMatch(/PL\/SQL/);
     expect(r.at(-1)!.ok).toBe(true);
   });
+
+  it('EXTRACT(YEAR/MONTH FROM …) und ADD_MONTHS wie in Oracle', () => {
+    const db = createDatabase(SQL);
+    const r = runScript(db, `SELECT EXTRACT(YEAR FROM DATE '2021-03-15'), EXTRACT(MONTH FROM DATE '2021-03-15'), ADD_MONTHS(DATE '2021-01-31', 1), ADD_MONTHS(DATE '2021-03-15', -6) FROM dual;`);
+    expect(r[0].ok).toBe(true);
+    expect(r[0].rows![0]).toEqual([2021, 3, '2021-02-28', '2020-09-15']);
+  });
 });

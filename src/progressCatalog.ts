@@ -4,6 +4,7 @@ import { BUILTIN_CHAPTERS, EXAM_MODES, type Chapter, type ExamMode } from './con
 import { codeTasks } from './content/codeTasks';
 import { mcQuestions } from './content/mcQuestions';
 import { topicById, topics } from './content/topics';
+import { viewExercises } from './content/viewExercises';
 import { mastery, passStreak, type ProgressData } from './progress';
 
 export const CHAPTERS: Chapter[] = [...BUILTIN_CHAPTERS];
@@ -22,6 +23,7 @@ export const catalog: CatalogItem[] = [];
 const buildCatalog = (): CatalogItem[] => [
   ...mcQuestions.map((q) => ({ id: `mc:${q.id}`, topicId: q.topicId, kind: 'frage' as const })),
   ...codeTasks.map((t) => ({ id: `code:${t.id}`, topicId: t.topicId, kind: 'uebung' as const })),
+  ...viewExercises.map((e) => ({ id: `sql:${e.id}`, topicId: e.topicId, kind: 'uebung' as const })),
   { id: 'calc:btree', topicId: '01-bbaum', kind: 'uebung' },
   { id: 'calc:bitmap', topicId: '01-bitmap', kind: 'uebung' },
   ...KOMP_VERFAHREN.map((v) => ({ id: `calc:komp:${v}`, topicId: '05-kompression', kind: 'uebung' as const })),

@@ -3,9 +3,8 @@ import { EditorExercise } from '../components/EditorExercise';
 import { ScenarioBrowser } from '../components/ScenarioBrowser';
 import { ResultTable } from '../components/SqlOutput';
 import { LEVEL_NAME, scenarioById } from '../content/scenarios';
-import { sqlExercises } from '../content/sqlExercises';
+import { viewExercises as sqlExercises } from '../content/viewExercises';
 import { runSqlExercise, type SqlRun } from '../sql/sqlGrading';
-import { topicById } from '../content/topics';
 import { useSql } from '../useSql';
 
 function Comparison({ run }: { run: SqlRun }) {
@@ -54,29 +53,28 @@ export function SqlExercisePage({ id, onNext }: { id: string; onNext?: () => voi
   if (!ex)
     return (
       <p>
-        Aufgabe nicht gefunden. <a href="#/sql" className="underline">Zur Liste</a>
+        Aufgabe nicht gefunden. <a href="#/views" className="underline">Zur Liste</a>
       </p>
     );
-  const same = sqlExercises.filter((e) => e.kind === ex.kind && (e.scenario ?? 'hochschule') === (ex.scenario ?? 'hochschule'));
+  const same = sqlExercises.filter((e) => (e.scenario ?? 'coworkers') === (ex.scenario ?? 'coworkers'));
   const next = same[same.indexOf(ex) + 1];
 
   return (
     <EditorExercise
       progressId={`sql:${ex.id}`}
-      backHref="#/sql"
-      backLabel="Aufgaben"
+      backHref="#/views"
+      backLabel="Views und Materialized Views"
       title={ex.title}
-      topic={`${scenarioById(ex.scenario).name} · ${LEVEL_NAME[ex.level]} · ${ex.kind === 'dql' ? 'Abfrage (DQL)' : 'Datenänderung (DML)'} · ${ex.topic}`}
+      topic={`${scenarioById(ex.scenario).name} · ${LEVEL_NAME[ex.level]} · ${ex.kind === 'view' ? 'View anlegen' : ex.kind === 'dql' ? 'Abfrage' : 'Datenänderung'} · ${ex.topic}`}
       task={ex.task}
       hints={ex.hints}
       solution={ex.solution}
       starter={ex.starter ?? (ex.kind === 'dql' ? 'SELECT ' : '')}
       ready={!!SQL}
       loadError={error}
-      nextHref={next && `#/sql/${next.id}`}
+      nextHref={next && `#/views/${next.id}`}
       onNext={onNext}
-      tracking={{ id: `sql:${ex.id}`, topicId: ex.topicId, chapter: topicById(ex.topicId)?.chapter ?? 'SQL', level: ex.level }}
-      freshNote="Jeder Lauf startet mit dem ursprünglichen Datenbestand, Änderungen bleiben nicht erhalten."
+      freshNote={`Jeder Lauf startet mit dem ursprünglichen Datenbestand${ex.setup ? ' (inklusive der vorgegebenen View)' : ''}, Änderungen bleiben nicht erhalten.`}
       aside={
         <>
           {ex.given && (

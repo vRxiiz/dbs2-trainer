@@ -33,12 +33,15 @@ export interface SqlRun {
 export type Dataset = 'A' | 'B';
 
 /** Frische Datenbank eines Szenarios mit Datenbestand A (sichtbar) oder B (verdeckt) */
-export function scenarioDb(SQL: SqlJsStatic, scenarioId: string | undefined, data: Dataset = 'A'): Database {
+export function scenarioDb(SQL: SqlJsStatic, scenarioId: string | undefined, data: Dataset = 'A', setup = ''): Database {
   const sc = scenarioById(scenarioId);
   const db = createDatabase(SQL);
-  const res = runScript(db, sc.schema + (data === 'A' ? sc.dataA : sc.dataB));
+  const res = runScript(db, sc.schema + (data === 'A' ? sc.dataA : sc.dataB) + '\n' + setup);
   const bad = res.find((r) => !r.ok);
-  if (bad) throw new Error(`Fall-Datenbank ${sc.id}/${data} fehlerhaft: ${bad.sql} -> ${bad.message}`);
+  if (bad) {
+    db.close();
+    throw new Error(`Fall-Datenbank ${sc.id}/${data} fehlerhaft: ${bad.sql} -> ${bad.message}`);
+  }
   return db;
 }
 
@@ -81,8 +84,8 @@ function tableContent(db: Database, table: string): ResultSet {
 
 /* ---------------- DQL ---------------- */
 
-function runSelect(SQL: SqlJsStatic, scenario: string | undefined, data: Dataset, sql: string): StatementResult {
-  const db = scenarioDb(SQL, scenario, data);
+function runSelect(SQL: SqlJsStatic, ex: SqlExercise, data: Dataset, sql: string): StatementResult {
+  const db = scenarioDb(SQL, ex.scenario, data, ex.setup);
   try {
     return executeStatement(db, sql);
   } finally {
@@ -94,7 +97,7 @@ function gradeDql(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
   const stmts = splitStatements(script);
   const checks: CheckResult[] = [];
   if (stmts.length !== 1 || !/^\s*(SELECT|WITH)\b/i.test(stmts[0])) {
-    const results = stmts.length ? runSelectAll(SQL, ex.scenario, stmts) : [];
+    const results = stmts.length ? runSelectAll(SQL, ex, stmts) : [];
     return {
       results,
       checks: [{ label: 'Genau eine SELECT-Anweisung', ok: false, hint: `Gefunden: ${stmts.length} Anweisung(en). Die Lösung ist eine einzelne SELECT-Abfrage.` }],
@@ -102,9 +105,9 @@ function gradeDql(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
     };
   }
   const [stmt] = stmts;
-  const userA = runSelect(SQL, ex.scenario, 'A', stmt);
+  const userA = runSelect(SQL, ex, 'A', stmt);
   const refStmt = splitStatements(ex.solution)[0];
-  const refA = runSelect(SQL, ex.scenario, 'A', refStmt);
+  const refA = runSelect(SQL, ex, 'A', refStmt);
   const expected = { columns: refA.columns ?? [], rows: refA.rows ?? [] };
 
   checks.push({ label: 'Abfrage läuft fehlerfrei', ok: userA.ok, hint: userA.ok ? undefined : `${userA.message}${userA.ora ? ` (${userA.ora})` : ''}` });
@@ -133,8 +136,8 @@ function gradeDql(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
     checks.push({ label: 'Richtige Reihenfolge', ok: orderOk, hint: orderOk ? undefined : 'Die Zeilen stimmen, aber die Sortierung nicht.' });
   }
   if (checks.every((c) => c.ok)) {
-    const userB = runSelect(SQL, ex.scenario, 'B', stmt);
-    const refB = runSelect(SQL, ex.scenario, 'B', refStmt);
+    const userB = runSelect(SQL, ex, 'B', stmt);
+    const refB = runSelect(SQL, ex, 'B', refStmt);
     const dB = multisetDiff(refB.rows ?? [], userB.rows ?? []);
     const okB =
       userB.ok &&
@@ -150,8 +153,8 @@ function gradeDql(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
   return { results: [userA], checks, passed: checks.every((c) => c.ok), actual, expected };
 }
 
-function runSelectAll(SQL: SqlJsStatic, scenario: string | undefined, stmts: string[]): StatementResult[] {
-  const db = scenarioDb(SQL, scenario, 'A');
+function runSelectAll(SQL: SqlJsStatic, ex: SqlExercise, stmts: string[]): StatementResult[] {
+  const db = scenarioDb(SQL, ex.scenario, 'A', ex.setup);
   try {
     return stmts.map((s) => executeStatement(db, s));
   } finally {
@@ -236,12 +239,101 @@ function gradeDml(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
   return { results: user.results, checks, passed: checks.every((c) => c.ok), diffs, changed: target };
 }
 
+/* ---------------- Views und Materialized Views ---------------- */
+
+interface ViewState {
+  results: StatementResult[];
+  /** 'view', 'mv' oder null, wenn das Objekt fehlt */
+  type: 'view' | 'mv' | null;
+  content: ResultSet;
+}
+
+function viewState(SQL: SqlJsStatic, ex: SqlExercise, data: Dataset, script: string): ViewState {
+  const db = scenarioDb(SQL, ex.scenario, data, ex.setup);
+  try {
+    const results = runScript(db, script);
+    const name = ex.view ?? '';
+    const obj = db.exec('SELECT name, type FROM sqlite_master WHERE lower(name) = lower(?)', [name])[0]?.values[0];
+    const isMv =
+      !!obj &&
+      (db.exec("SELECT 1 FROM sqlite_master WHERE name = '__mviews'")[0]?.values.length ?? 0) > 0 &&
+      (db.exec('SELECT 1 FROM "__mviews" WHERE lower(name) = lower(?)', [name])[0]?.values.length ?? 0) > 0;
+    const type = !obj ? null : isMv ? 'mv' : obj[1] === 'view' ? 'view' : null;
+    const content = type ? tableContent(db, String(obj![0])) : { columns: [], rows: [] };
+    return { results, type, content };
+  } finally {
+    db.close();
+  }
+}
+
+/** Inhalt der View (kind 'view') bzw. Ergebnis der Abfrage (kind 'dql') fuer ein Skript */
+export function viewResult(SQL: SqlJsStatic, ex: SqlExercise, data: Dataset, script: string): ResultSet {
+  if (ex.kind === 'view') return viewState(SQL, ex, data, script).content;
+  const r = runSelect(SQL, ex, data, splitStatements(script)[0] ?? '');
+  return { columns: r.columns ?? [], rows: r.rows ?? [] };
+}
+
+function gradeView(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
+  const name = ex.view ?? '';
+  const wantMv = /\bCREATE\s+MATERIALIZED\s+VIEW\b/i.test(ex.solution);
+  const user = viewState(SQL, ex, 'A', script);
+  const ref = viewState(SQL, ex, 'A', ex.solution);
+  const expected = ref.content;
+  const checks: CheckResult[] = [];
+  const failed = user.results.filter((r) => !r.ok);
+  checks.push({
+    label: 'Skript läuft fehlerfrei',
+    ok: user.results.length > 0 && failed.length === 0,
+    hint: !user.results.length ? 'Der Editor enthält keine Anweisung.' : failed.length ? `${failed[0].message}${failed[0].ora ? ` (${failed[0].ora})` : ''}` : undefined,
+  });
+  const kindOk = user.type === (wantMv ? 'mv' : 'view');
+  checks.push({
+    label: `${wantMv ? 'Materialized View' : 'View'} ${name} existiert`,
+    ok: kindOk,
+    hint: kindOk
+      ? undefined
+      : user.type
+        ? `${name} ist eine ${user.type === 'mv' ? 'Materialized View' : 'View'}, verlangt ist eine ${wantMv ? 'Materialized View' : 'View'}.`
+        : `Lege das Objekt mit dem Namen ${name} an.`,
+  });
+  if (!kindOk) return { results: user.results, checks, passed: false, expected };
+  const actual = user.content;
+  const colOk = actual.columns.length === expected.columns.length;
+  checks.push({
+    label: 'Richtige Anzahl Spalten',
+    ok: colOk,
+    hint: colOk ? undefined : `Deine View hat ${actual.columns.length} Spalte(n), erwartet sind ${expected.columns.length}.`,
+  });
+  const d = multisetDiff(expected.rows, actual.rows);
+  const rowsOk = colOk && d.missing.length === 0 && d.extra.length === 0;
+  checks.push({
+    label: 'Richtiger Inhalt',
+    ok: rowsOk,
+    hint: rowsOk
+      ? undefined
+      : !colOk
+        ? 'Erst die Spalten richtig wählen.'
+        : `${d.missing.length} erwartete Zeile(n) fehlen, ${d.extra.length} Zeile(n) sind zu viel. Stimmen Joins, Spaltenreihenfolge und Bedingungen?`,
+  });
+  if (checks.every((c) => c.ok)) {
+    const dB = multisetDiff(viewState(SQL, ex, 'B', ex.solution).content.rows, viewState(SQL, ex, 'B', script).content.rows);
+    const okB = dB.missing.length === 0 && dB.extra.length === 0;
+    checks.push({
+      label: 'Stimmt auch auf einem zweiten, verdeckten Datenbestand',
+      ok: okB,
+      hint: okB ? undefined : 'Auf anderen Daten weicht der Inhalt ab. Hast du Werte fest eingetragen, statt die Bedingung allgemein zu formulieren?',
+    });
+  }
+  return { results: user.results, checks, passed: checks.every((c) => c.ok), actual, expected };
+}
+
 export function runSqlExercise(SQL: SqlJsStatic, ex: SqlExercise, script: string): SqlRun {
+  if (ex.kind === 'view') return gradeView(SQL, ex, script);
   return ex.kind === 'dql' ? gradeDql(SQL, ex, script) : gradeDml(SQL, ex, script);
 }
 
 /** Spielwiese: beliebiges Skript auf Datenbestand A eines Szenarios */
-export function runPlayground(SQL: SqlJsStatic, script: string, scenario = 'hochschule'): StatementResult[] {
+export function runPlayground(SQL: SqlJsStatic, script: string, scenario = 'coworkers'): StatementResult[] {
   const db = scenarioDb(SQL, scenario, 'A');
   try {
     return runScript(db, script);
@@ -250,7 +342,7 @@ export function runPlayground(SQL: SqlJsStatic, script: string, scenario = 'hoch
   }
 }
 
-export function scenarioContent(SQL: SqlJsStatic, scenario = 'hochschule'): { table: string; data: ResultSet }[] {
+export function scenarioContent(SQL: SqlJsStatic, scenario = 'coworkers'): { table: string; data: ResultSet }[] {
   const db = scenarioDb(SQL, scenario, 'A');
   try {
     return scenarioById(scenario).tables.map((t) => ({ table: t, data: tableContent(db, t) }));
