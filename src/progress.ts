@@ -1,16 +1,11 @@
 // Lernstand: geloeste Uebungen, Ergebnisse je Aufgabe (wie im Fragenkatalog einer
 // Fuehrerschein-App) und die Historie der Probeklausuren.
 //
-// Speicherort:
-//   - immer im Browser (localStorage)
-//   - zusaetzlich in der Lernplattform, wenn der Trainer als SCORM-Paket laeuft
-//     (z. B. in ILU/ILIAS): dann haengt der Fortschritt am Login der Person und ist
-//     auf jedem Geraet verfuegbar. Es werden keine Daten an Dritte uebertragen.
-//   - Export/Import als Datei fuer den Wechsel zwischen Geraeten ausserhalb von ILU
+// Speicherort: nur im Browser (localStorage, Schluessel dbs2:progress).
+// Export/Import als Datei fuer den Wechsel zwischen Geraeten.
 
 import { useSyncExternalStore } from 'react';
-import { BUILTIN_CHAPTERS, type Chapter } from './content/mcQuestions';
-import { readSuspendData, scormActive, suspendLimit, writeSuspendData } from './scorm';
+import { EXAM_MODES, type Chapter, type ExamMode } from './content/chapters';
 
 /** [gesehen, richtig, Serie richtig in Folge, zuletzt (Unix-Sekunden)] */
 export type ItemStat = [number, number, number, number];
@@ -29,6 +24,8 @@ export interface ExamAttempt {
   x: number;
   /** Punkte je Kapitel: [erreicht, maximal] */
   k: Partial<Record<Chapter, [number, number]>>;
+  /** Pruefungsmodus */
+  mode: ExamMode;
 }
 
 export interface ProgressData {
@@ -38,7 +35,7 @@ export interface ProgressData {
   exams: ExamAttempt[];
 }
 
-const KEY = 'dbt:progress';
+const KEY = 'dbs2:progress';
 const empty = (): ProgressData => ({ v: 1, done: [], items: {}, exams: [] });
 
 /* ---------------- Laden und Zusammenfuehren ---------------- */
@@ -54,7 +51,7 @@ function parse(raw: string | null): ProgressData | null {
   return null;
 }
 
-/** Vereinigt zwei Staende (z. B. Browser und ILU): nichts geht verloren. */
+/** Vereinigt zwei Staende (z. B. Browser und importierte Datei): nichts geht verloren. */
 export function mergeProgress(a: ProgressData, b: ProgressData): ProgressData {
   const items: Record<string, ItemStat> = { ...a.items };
   for (const [k, s] of Object.entries(b.items)) if (!items[k] || s[3] > items[k][3]) items[k] = s;
@@ -65,21 +62,11 @@ export function mergeProgress(a: ProgressData, b: ProgressData): ProgressData {
 }
 
 function loadLocal(): ProgressData {
-  let data: ProgressData | null = null;
   try {
-    data = parse(localStorage.getItem(KEY));
-    // Uebernahme aus der ersten Prototyp-Version (einzelne Schluessel dbt:done:*)
-    if (!data) {
-      data = empty();
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k?.startsWith('dbt:done:')) data.done.push(k.slice(9));
-      }
-    }
+    return parse(localStorage.getItem(KEY)) ?? empty();
   } catch {
-    /* Speicher gesperrt */
+    return empty(); // Speicher gesperrt
   }
-  return data ?? empty();
 }
 
 let state: ProgressData = empty();
@@ -90,28 +77,6 @@ function ensureInit() {
   if (initialized) return;
   initialized = true;
   state = loadLocal();
-  const remote = parse(readSuspendData());
-  if (remote) state = mergeProgress(state, remote);
-}
-
-/** Kompakte Fassung fuer SCORM 1.2 (4096 Zeichen): aelteste Klausuren zuerst kuerzen. */
-export function compactForLimit(d: ProgressData, limit: number): string {
-  let copy: ProgressData = { ...d, exams: [...d.exams] };
-  let s = JSON.stringify(copy);
-  while (s.length > limit && copy.exams.length > 5) {
-    copy.exams.shift();
-    s = JSON.stringify(copy);
-  }
-  if (s.length > limit) {
-    // Notfall: aelteste Fragenstatistiken weglassen
-    const entries = Object.entries(copy.items).sort((x, y) => y[1][3] - x[1][3]);
-    while (s.length > limit && entries.length) {
-      entries.pop();
-      copy = { ...copy, items: Object.fromEntries(entries) };
-      s = JSON.stringify(copy);
-    }
-  }
-  return s;
 }
 
 function persist() {
@@ -121,7 +86,6 @@ function persist() {
   } catch {
     /* ignorieren */
   }
-  if (scormActive()) writeSuspendData(compactForLimit(state, suspendLimit()));
   listeners.forEach((l) => l());
 }
 
@@ -200,9 +164,7 @@ export function importProgress(json: string): boolean {
 }
 
 export function storageLabel(): string {
-  return scormActive()
-    ? 'Dein Fortschritt wird in der Lernplattform (z. B. ILU) unter deinem Login gespeichert und ist auf jedem Gerät verfügbar.'
-    : 'Dein Fortschritt wird nur in diesem Browser gespeichert. Mit „Fortschritt sichern“ nimmst du ihn auf ein anderes Gerät mit.';
+  return 'Dein Fortschritt wird nur in diesem Browser gespeichert. Mit „Fortschritt sichern“ nimmst du ihn auf ein anderes Gerät mit.';
 }
 
 /* ---------------- Auswertung ---------------- */
@@ -217,17 +179,18 @@ export function mastery(s?: ItemStat): Mastery {
   return 'falsch';
 }
 
-export const PASS_PERCENT = 50;
+/** Bestehensgrenze in Prozent: MCT 60 von 100 Punkten, E-Klausur 50 % */
+export const passPercent = (mode: ExamMode) => (mode === 'klausur' ? 50 : 60);
 
 export const percentOf = (e: ExamAttempt) => (e.x ? (100 * e.p) / e.x : 0);
-export const passed = (e: ExamAttempt) => percentOf(e) >= PASS_PERCENT;
-/** Zaehlt fuer die Pruefungsreife: alle Kapitel, mindestens 60 Minuten */
-export const isFull = (e: ExamAttempt) => BUILTIN_CHAPTERS.every((c) => e.c.includes(c)) && e.m >= 60;
+export const passed = (e: ExamAttempt) => percentOf(e) >= passPercent(e.mode);
+/** Zaehlt fuer die Pruefungsreife: volle Bearbeitungszeit des Modus */
+export const isFull = (e: ExamAttempt) => e.m >= EXAM_MODES[e.mode].minutes;
 
-/** Bestandene vollstaendige Probeklausuren in Folge (die juengsten zuerst) */
-export function passStreak(exams: ExamAttempt[]): number {
+/** Bestandene vollstaendige Probeklausuren eines Modus in Folge (die juengsten zuerst) */
+export function passStreak(exams: ExamAttempt[], mode: ExamMode): number {
   let n = 0;
-  for (const e of [...exams].filter(isFull).reverse()) {
+  for (const e of exams.filter((x) => x.mode === mode && isFull(x)).reverse()) {
     if (!passed(e)) break;
     n++;
   }
@@ -238,7 +201,7 @@ export function passStreak(exams: ExamAttempt[]): number {
 
 export function loadDraft(id: string, fallback: string): string {
   try {
-    return localStorage.getItem(`dbt:draft:${id}`) ?? fallback;
+    return localStorage.getItem(`dbs2:draft:${id}`) ?? fallback;
   } catch {
     return fallback;
   }
@@ -246,7 +209,7 @@ export function loadDraft(id: string, fallback: string): string {
 
 export function saveDraft(id: string, value: string) {
   try {
-    localStorage.setItem(`dbt:draft:${id}`, value);
+    localStorage.setItem(`dbs2:draft:${id}`, value);
   } catch {
     /* ignorieren */
   }
