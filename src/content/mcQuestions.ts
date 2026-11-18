@@ -10,6 +10,7 @@ import { k04 } from './fragen/k04';
 import { k05 } from './fragen/k05';
 import { k06 } from './fragen/k06';
 import { k07 } from './fragen/k07';
+import { praktikum } from './fragen/praktikum';
 
 export { BUILTIN_CHAPTERS, CHAPTER_NAME, type Chapter } from './chapters';
 
@@ -27,4 +28,4 @@ export interface McQuestion {
   source: string;
 }
 
-export const mcQuestions: McQuestion[] = [...k01, ...k02, ...k03, ...k04, ...k05, ...k06, ...k07];
+export const mcQuestions: McQuestion[] = [...k01, ...k02, ...k03, ...k04, ...k05, ...k06, ...k07, ...praktikum];

@@ -8,8 +8,8 @@ Browser, ohne Server, ohne Anmeldung und ohne Tracking. Oberfläche und SQL-Engi
 
 | Bereich | Route | Inhalt |
 |---|---|---|
-| Wissensfragen | `#/lernen` | 172 Fragen zu allen 7 Kapiteln, Lernreihenfolge wie in Führerschein-Apps |
-| Code-Aufgaben | `#/code` | 46 Aufgaben (Indexe, PL/SQL, Trigger, MVs, In-Memory) mit Strukturprüfung und Musterlösung, inkl. Altklausur 1–3 |
+| Wissensfragen | `#/lernen` | 183 Fragen zu allen 7 Kapiteln, Lernreihenfolge wie in Führerschein-Apps |
+| Code-Aufgaben | `#/code` | 47 Aufgaben (Indexe, PL/SQL, Trigger, MVs, In-Memory) mit Strukturprüfung und Musterlösung, inkl. Altklausur 1–3 |
 | Views und MVs | `#/views` | 10 Aufgaben, die in der Browser-Datenbank laufen und am Ergebnis geprüft werden |
 | Rechentrainer | `#/rechnen` | B-Baum, Bitmap-Index, Kompression (Lauflänge, Bitvektor, Dictionary, FOR, Differenz) |
 | Spielwiese | `#/spielwiese` | SQL auf Coworkers, Honigernten und Hotelbuchungen |
