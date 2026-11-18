@@ -723,6 +723,64 @@ END t_follower;
     source: 'Übung 3b, Softwarelizenzen (3), Compound Trigger',
   },
   {
+    id: 'spieler-teams',
+    topicId: '03-mutating',
+    title: 'Compound-Trigger: Spieler abwechselnd auf Teams verteilen',
+    level: 3,
+    scenario: 'keins',
+    task:
+      'Gegeben ist die Tabelle SPIELER(NAME, TEAM). Neue Spieler sollen automatisch abwechselnd den Teams 1 und 2 zugeteilt werden: Neu kommt immer in das Team mit weniger Spielern, bei Gleichstand in Team 1. Weil dafür die Tabelle SPIELER gelesen wird, während darauf eingefügt wird, schreibe einen Compound-Trigger.',
+    hints: [
+      'CREATE OR REPLACE TRIGGER … FOR INSERT ON spieler COMPOUND TRIGGER',
+      'Im BEFORE STATEMENT-Teil die Teamgrößen zählen: SELECT COUNT(*) INTO v_team1 FROM spieler WHERE team = 1;',
+      'Im BEFORE EACH ROW-Teil :NEW.team setzen und den Zähler der gewählten Gruppe erhöhen, damit mehrere Zeilen in einer Anweisung abwechseln.',
+    ],
+    solution: `CREATE OR REPLACE TRIGGER t_team_zuteilen
+FOR INSERT ON spieler
+COMPOUND TRIGGER
+  v_team1 NUMBER;
+  v_team2 NUMBER;
+
+  BEFORE STATEMENT IS
+  BEGIN
+    SELECT COUNT(*) INTO v_team1 FROM spieler WHERE team = 1;
+    SELECT COUNT(*) INTO v_team2 FROM spieler WHERE team = 2;
+  END BEFORE STATEMENT;
+
+  BEFORE EACH ROW IS
+  BEGIN
+    IF v_team1 <= v_team2 THEN
+      :NEW.team := 1;
+      v_team1 := v_team1 + 1;
+    ELSE
+      :NEW.team := 2;
+      v_team2 := v_team2 + 1;
+    END IF;
+  END BEFORE EACH ROW;
+END t_team_zuteilen;
+/`,
+    checks: [
+      { label: 'Compound-Trigger FOR INSERT ON spieler', hint: 'CREATE OR REPLACE TRIGGER … FOR INSERT ON spieler COMPOUND TRIGGER', all: [r`${TRG} FOR INSERT ON SPIELER COMPOUND TRIGGER`] },
+      { label: 'Teamgrößen im BEFORE STATEMENT-Teil gezählt', hint: 'BEFORE STATEMENT IS BEGIN SELECT COUNT(*) INTO … FROM spieler WHERE team = 1; … team = 2; END BEFORE STATEMENT;', all: [r`BEFORE STATEMENT IS BEGIN .*COUNT ?\( ?\* ?\) INTO \w+ FROM SPIELER WHERE TEAM ?= ?1.*COUNT ?\( ?\* ?\) INTO \w+ FROM SPIELER WHERE TEAM ?= ?2.*END BEFORE STATEMENT`] },
+      { label: ':NEW.team im BEFORE EACH ROW-Teil gesetzt', hint: 'BEFORE EACH ROW IS BEGIN … :NEW.team := 1; … :NEW.team := 2; … END BEFORE EACH ROW;', all: [r`BEFORE EACH ROW IS BEGIN .*:NEW\.TEAM ?:= ?1.*:NEW\.TEAM ?:= ?2.*END BEFORE EACH ROW`] },
+      { label: 'Zähler im Row-Teil fortgeschrieben', hint: 'Mehrere Zeilen in einer Anweisung wechseln nur, wenn v_team1 := v_team1 + 1 im Row-Teil steht.', all: [r`BEFORE EACH ROW IS .*(\w+) ?:= ?\1 ?\+ ?1.*(\w+) ?:= ?\2 ?\+ ?1`] },
+      { label: 'Kein SELECT auf spieler im Row-Teil', hint: 'Das Lesen der eigenen Tabelle im Row-Teil löst das Mutating-Table-Problem aus.', all: [r`TRIGGER`], none: [r`BEFORE EACH ROW IS .*FROM SPIELER .*END BEFORE EACH ROW`] },
+    ],
+    wrong: [
+      `CREATE OR REPLACE TRIGGER t_team_zuteilen
+BEFORE INSERT ON spieler
+FOR EACH ROW
+DECLARE v_team1 NUMBER; v_team2 NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_team1 FROM spieler WHERE team = 1;
+  SELECT COUNT(*) INTO v_team2 FROM spieler WHERE team = 2;
+  IF v_team1 <= v_team2 THEN :NEW.team := 1; ELSE :NEW.team := 2; END IF;
+END;
+/`,
+    ],
+    source: 'Praktikum, DBS2 Test 2 (Compound Trigger SPIELER)',
+  },
+  {
     id: 'comp-increase-sal',
     topicId: '03-mutating',
     title: 'Compound-Trigger: Gehalt nach Anzahl Projekte',
