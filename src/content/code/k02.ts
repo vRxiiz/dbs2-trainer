@@ -367,6 +367,50 @@ END;
     source: 'Folien PL/SQL, Funktionen (totalCustomers)',
   },
   {
+    id: 'func-count-behandlungen',
+    topicId: '02-cursor',
+    title: 'Funktion func_countBehandlungen',
+    level: 2,
+    scenario: 'keins',
+    task:
+      'Gegeben sind MEDIKAMENT(MEDIKAMENT_ID, NAME) und BEHANDLUNGS_MEDIKAMENT(MEDIKAMENT_ID, …, NEHMEN_BIS). Für einen übergebenen Medikament-Namen soll die Funktion func_countBehandlungen die Anzahl der Behandlungen zurückgeben, bei denen das Medikament zum Zeitpunkt der Ausführung noch eingenommen werden muss.',
+    hints: ['SELECT COUNT(*) INTO v_anzahl FROM … JOIN … ON … WHERE …', 'Noch einzunehmen: nehmen_bis >= SYSDATE', 'Der Spaltenname hat einen Unterstrich, kein Minus: nehmen_bis.'],
+    solution: `CREATE OR REPLACE FUNCTION func_countBehandlungen (p_medikament IN VARCHAR2)
+RETURN NUMBER
+AS
+  v_anzahl NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_anzahl
+  FROM medikament m
+  JOIN behandlungs_medikament bm ON m.medikament_id = bm.medikament_id
+  WHERE m.name = p_medikament
+    AND bm.nehmen_bis >= SYSDATE;
+  RETURN v_anzahl;
+END;
+/`,
+    checks: [
+      { label: 'Funktion mit Namensparameter und RETURN NUMBER', hint: 'CREATE OR REPLACE FUNCTION func_countBehandlungen (p_medikament IN VARCHAR2) RETURN NUMBER', all: [r`CREATE (OR REPLACE )?FUNCTION FUNC_COUNTBEHANDLUNGEN ?\( ?\w+ (IN )?VARCHAR2 ?\) RETURN NUMBER (AS|IS)`] },
+      { label: 'COUNT(*) INTO Variable', hint: 'SELECT COUNT(*) INTO v_anzahl …', all: [r`SELECT COUNT ?\( ?\* ?\) INTO \w+ FROM`] },
+      { label: 'Join von MEDIKAMENT und BEHANDLUNGS_MEDIKAMENT', hint: 'FROM medikament m JOIN behandlungs_medikament bm ON m.medikament_id = bm.medikament_id', all: [r`FROM MEDIKAMENT \w+ JOIN BEHANDLUNGS_MEDIKAMENT \w+ ON \w+\.MEDIKAMENT_ID ?= ?\w+\.MEDIKAMENT_ID`] },
+      { label: 'Filter auf Namen und noch laufende Einnahme', hint: 'WHERE m.name = p_medikament AND bm.nehmen_bis >= SYSDATE', all: [r`WHERE (\w+\.)?NAME ?= ?\w+`, r`(\w+\.)?NEHMEN_BIS ?>= ?SYSDATE`] },
+      { label: 'Ergebnis zurückgegeben', hint: 'RETURN v_anzahl;', all: [r`RETURN \w+ ?; END`] },
+    ],
+    wrong: [
+      `CREATE OR REPLACE FUNCTION func_countBehandlungen (p_medikament IN VARCHAR2)
+RETURN NUMBER
+AS
+  v_anzahl NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_anzahl
+  FROM medikament m JOIN behandlungs_medikament bm ON m.medikament_id = bm.medikament_id
+  WHERE m.name = p_medikament;
+  RETURN v_anzahl;
+END;
+/`,
+    ],
+    source: 'Praktikum, DBS2 Test 2, Nr. 17 (Funktion_02_SE)',
+  },
+  {
     id: 'ueber-durchschnitt',
     topicId: '02-cursor',
     title: 'Überdurchschnittliche Verdiener',
