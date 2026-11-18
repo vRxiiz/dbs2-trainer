@@ -57,7 +57,7 @@ export const praktikum = [
     ['Sie kompiliert nicht, weil ein IN-Parameter nicht zugewiesen werden darf', 'Dafür ist ein DECLARE-Teil nötig', 'sum ist der Rückgabewert der Prozedur', 'Alle Variablen müssen vorher initialisiert werden'], 0,
     'Zuweisungen sind nur an OUT- und IN OUT-Parameter erlaubt. Prozeduren haben keinen Rückgabewert, und der Kopf braucht kein DECLARE.', T2),
   q('prak-plsql-03', '02-cursor', 'Welche Aussagen zu PL/SQL sind richtig?',
-    ['Der anonyme Block ist das kleinste Strukturelement', 'Mit %TYPE übernimmt man den Datentyp einer Spalte dynamisch', 'Die Cursor-Deklaration führt das SELECT bereits aus', 'Der Impedance Mismatch beschreibt den Bruch zwischen mengenorientiertem SQL und satzweiser Verarbeitung'], [0, 1, 3],
+    ['Der anonyme Block ist das kleinste Strukturelement', 'Mit %TYPE übernimmt man den Datentyp einer Spalte dynamisch', 'Die Cursor-Deklaration führt das SELECT bereits aus', 'Der Impedance Mismatch beschreibt die Herausforderung, objektorientierte Programmierung mit einer relationalen Datenbank zu verknüpfen'], [0, 1, 3],
     'Ausgeführt wird die Abfrage erst bei OPEN. Der Impedance Mismatch gehört auch zu Kapitel 6.', T2),
   q('prak-plsql-05', '02-cursor', 'Welche Aussagen zu PL/SQL sind richtig?',
     ['DDL ist in PL/SQL nicht möglich', 'Prozeduren lassen sich in der Kommandozeile mit EXEC aufrufen', 'Ein Cursor lässt sich auch mit einer WHILE-Schleife durchlaufen', 'Ausgaben erfolgen ausschließlich als Rückgabewert, nicht auf der Konsole'], [1, 2],
