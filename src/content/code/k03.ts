@@ -781,6 +781,137 @@ END;
     source: 'Praktikum, DBS2 Test 2 (Compound Trigger SPIELER)',
   },
   {
+    id: 'gilde-pro-monat',
+    topicId: '03-before-after',
+    title: 'Eine Gilde pro Monat',
+    level: 2,
+    scenario: 'keins',
+    task:
+      'Gegeben ist die Tabelle GILDEN(GILDEN_ID, NAME, GRUNDUNGSDATUM, CHARAKTER_ID). Ein Videospiel-Charakter gründet eine Gilde, CHARAKTER_ID ist der Gründer. Jeder Charakter darf pro Monat nur eine Gilde gründen. Versucht er eine weitere im selben Monat zu gründen, soll das Einfügen mit dem Fehler „Ein Charakter darf pro Monat nur eine Gilde gründen.“ verhindert werden.',
+    hints: [
+      'Etwas verhindern heißt: vor dem Einfügen prüfen, also BEFORE INSERT ON gilden FOR EACH ROW.',
+      'Die Werte der neuen Zeile stehen in :NEW (mit Doppelpunkt).',
+      'Gleicher Monat im gleichen Jahr: TO_CHAR(grundungsdatum, \'MM.YYYY\') = TO_CHAR(:NEW.grundungsdatum, \'MM.YYYY\')',
+    ],
+    solution: `CREATE OR REPLACE TRIGGER eine_gilde_pro_monat
+BEFORE INSERT ON gilden
+FOR EACH ROW
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count FROM gilden
+  WHERE charakter_id = :NEW.charakter_id
+  AND TO_CHAR(grundungsdatum, 'MM.YYYY') = TO_CHAR(:NEW.grundungsdatum, 'MM.YYYY');
+
+  IF v_count > 0 THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Ein Charakter darf pro Monat nur eine Gilde gründen.');
+  END IF;
+END;
+/`,
+    checks: [
+      { label: 'BEFORE INSERT als Zeilentrigger', hint: 'BEFORE INSERT ON gilden FOR EACH ROW', all: [r`${TRG} BEFORE INSERT ON GILDEN ${ROW}`] },
+      { label: 'Gilden desselben Charakters gezählt', hint: 'SELECT COUNT(*) INTO v_count FROM gilden WHERE charakter_id = :NEW.charakter_id', all: [r`SELECT COUNT ?\( ?\* ?\) INTO \w+ FROM GILDEN WHERE`, r`CHARAKTER_ID ?= ?:NEW\.CHARAKTER_ID`] },
+      {
+        label: 'Auf denselben Monat im selben Jahr eingeschränkt',
+        hint: "TO_CHAR(grundungsdatum, 'MM.YYYY') = TO_CHAR(:NEW.grundungsdatum, 'MM.YYYY'), alternativ TRUNC(…, 'MM') oder EXTRACT(MONTH …) und EXTRACT(YEAR …)",
+        all: [r`:NEW\.GRUNDUNGSDATUM`],
+        any: [r`TO_CHAR ?\( ?GRUNDUNGSDATUM ?,`, r`TRUNC ?\( ?GRUNDUNGSDATUM ?,`, r`EXTRACT ?\( ?MONTH FROM GRUNDUNGSDATUM ?\)`],
+      },
+      { label: 'Abbruch bei bereits gegründeter Gilde', hint: "IF v_count > 0 THEN RAISE_APPLICATION_ERROR(-20001, '…'); END IF;", all: [r`IF \w+ ?(> ?0|>= ?1) THEN ${RAISE}`] },
+      { label: 'Transitionsvariablen mit Doppelpunkt', hint: 'Im Trigger-Rumpf heißt es :NEW.charakter_id, nicht NEW.charakter_id.', all: [r`:NEW\.`], none: [r`(^|[^:\w])NEW\.`] },
+    ],
+    wrong: [
+      `CREATE OR REPLACE TRIGGER eine_gilde_pro_monat
+BEFORE INSERT ON gilden
+FOR EACH ROW
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count FROM gilden
+  WHERE charakter_id = NEW.charakter_id
+  AND TO_CHAR(grundungsdatum, 'MM.YYYY') = TO_CHAR(NEW.grundungsdatum, 'MM.YYYY');
+  IF v_count > 0 THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Ein Charakter darf pro Monat nur eine Gilde gründen.');
+  END IF;
+END;
+/`,
+      `CREATE OR REPLACE TRIGGER eine_gilde_pro_monat
+AFTER INSERT ON gilden
+FOR EACH ROW
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count FROM gilden WHERE charakter_id = :NEW.charakter_id;
+  IF v_count > 0 THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Ein Charakter darf pro Monat nur eine Gilde gründen.');
+  END IF;
+END;
+/`,
+    ],
+    source: 'Praktikum, DDM P2 (Relationenmodell 1, Gilde pro Monat)',
+  },
+  {
+    id: 'abteilungsleitung-spezialisierung',
+    topicId: '03-events',
+    title: 'Abteilungsleitung: gleiche Spezialisierung',
+    level: 2,
+    scenario: 'keins',
+    task:
+      'Gegeben sind ABTEILUNG(ABTEILUNGS_ID, NAME, STANDORT, ABTEILUNGS_LEITER_ID → ARZT) und ARZT(ARZT_ID, VORNAME, NACHNAME, EMAIL, LEVEL, SPEZIALISIERUNG VARCHAR2(20) NOT NULL, ABTEILUNGS_ID → ABTEILUNG). Ein Trigger soll sicherstellen, dass sich beim Wechsel der Abteilungsleitung die Spezialisierung der Leitung nicht ändert. Sonst bricht er mit „Die neue Abteilungsleitung hat die falsche Spezialisierung“ ab.',
+    hints: [
+      'Gefeuert wird nur, wenn sich die Leitung ändert: BEFORE UPDATE OF abteilungs_leiter_id ON abteilung FOR EACH ROW',
+      'Die Spezialisierungen stehen in ARZT: einmal für :NEW.abteilungs_leiter_id, einmal für :OLD.abteilungs_leiter_id.',
+      'Variablen passend typisieren: arzt.spezialisierung%TYPE oder VARCHAR2(20).',
+    ],
+    solution: `CREATE OR REPLACE TRIGGER trg_leiter_wechsel
+BEFORE UPDATE OF abteilungs_leiter_id ON abteilung
+FOR EACH ROW
+DECLARE
+  v_alt arzt.spezialisierung%TYPE;
+  v_neu arzt.spezialisierung%TYPE;
+BEGIN
+  SELECT spezialisierung INTO v_neu FROM arzt WHERE arzt_id = :NEW.abteilungs_leiter_id;
+  SELECT spezialisierung INTO v_alt FROM arzt WHERE arzt_id = :OLD.abteilungs_leiter_id;
+
+  IF v_neu != v_alt THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Die neue Abteilungsleitung hat die falsche Spezialisierung');
+  END IF;
+END;
+/`,
+    checks: [
+      { label: 'BEFORE UPDATE OF abteilungs_leiter_id als Zeilentrigger', hint: 'BEFORE UPDATE OF abteilungs_leiter_id ON abteilung FOR EACH ROW', all: [r`${TRG} BEFORE UPDATE OF ABTEILUNGS_LEITER_ID ON ABTEILUNG ${ROW}`] },
+      { label: 'Spezialisierung der neuen Leitung gelesen', hint: 'SELECT spezialisierung INTO v_neu FROM arzt WHERE arzt_id = :NEW.abteilungs_leiter_id;', all: [r`SELECT SPEZIALISIERUNG INTO \w+ FROM ARZT WHERE ARZT_ID ?= ?:NEW\.ABTEILUNGS_LEITER_ID`] },
+      { label: 'Spezialisierung der alten Leitung gelesen', hint: 'SELECT spezialisierung INTO v_alt FROM arzt WHERE arzt_id = :OLD.abteilungs_leiter_id;', all: [r`SELECT SPEZIALISIERUNG INTO \w+ FROM ARZT WHERE ARZT_ID ?= ?:OLD\.ABTEILUNGS_LEITER_ID`] },
+      { label: 'Abbruch bei unterschiedlicher Spezialisierung', hint: "IF v_neu != v_alt THEN RAISE_APPLICATION_ERROR(-20001, '…'); END IF;", all: [r`IF \w+ ?(!=|<>|\^=) ?\w+ THEN ${RAISE}`] },
+    ],
+    wrong: [
+      `CREATE OR REPLACE TRIGGER trg_leiter_wechsel
+AFTER UPDATE OF abteilungs_leiter_id ON abteilung
+FOR EACH ROW
+DECLARE
+  v_alt VARCHAR2(20);
+  v_neu VARCHAR2(20);
+BEGIN
+  SELECT spezialisierung INTO v_neu FROM arzt WHERE arzt_id = :NEW.abteilungs_leiter_id;
+  SELECT spezialisierung INTO v_alt FROM arzt WHERE arzt_id = :OLD.abteilungs_leiter_id;
+  IF v_neu != v_alt THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Die neue Abteilungsleitung hat die falsche Spezialisierung');
+  END IF;
+END;
+/`,
+      `CREATE OR REPLACE TRIGGER trg_leiter_wechsel
+BEFORE UPDATE OF abteilungs_leiter_id ON abteilung
+FOR EACH ROW
+BEGIN
+  IF :NEW.abteilungs_leiter_id != :OLD.abteilungs_leiter_id THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Die neue Abteilungsleitung hat die falsche Spezialisierung');
+  END IF;
+END;
+/`,
+    ],
+    source: 'Praktikum, DDM P2 (Relationenmodell 2, Abteilungsleitung)',
+  },
+  {
     id: 'comp-increase-sal',
     topicId: '03-mutating',
     title: 'Compound-Trigger: Gehalt nach Anzahl Projekte',
